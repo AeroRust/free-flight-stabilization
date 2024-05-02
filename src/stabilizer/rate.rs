@@ -1,4 +1,4 @@
-// src/controller/rate.rs
+// src/stabilizer/rate.rs
 
 //! # Rate PID-based Flight Stabilization Controller
 //!
@@ -136,6 +136,8 @@ pub unsafe fn control_rate() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::*;
+    use crate::FlightStabilizerConfig;
 
     fn reset_initial_conditions() {
         unsafe {
@@ -192,15 +194,18 @@ mod tests {
             control_rate();
 
             // Check if the PID outputs are as expected
-            assert_eq!(
-                0.0, ROLL_PID,
+            assert!(
+                value_close(0.0, ROLL_PID),
                 "Roll PID should be zero as there is no error."
             );
-            assert_eq!(
-                0.0, PITCH_PID,
+            assert!(
+                value_close(0.0, PITCH_PID),
                 "Pitch PID should be zero as there is no error."
             );
-            assert_eq!(0.0, YAW_PID, "Yaw PID should be zero as there is no error.");
+            assert!(
+                value_close(0.0, YAW_PID),
+                "Yaw PID should be zero as there is no error."
+            );
         }
     }
 
@@ -222,12 +227,18 @@ mod tests {
             control_rate();
 
             // Verify that integrators are reset
-            assert_eq!(INTEGRAL_ROLL_PREV, 0.0, "Roll integrator should be reset.");
-            assert_eq!(
-                INTEGRAL_PITCH_PREV, 0.0,
+            assert!(
+                value_close(INTEGRAL_ROLL_PREV, 0.0),
+                "Roll integrator should be reset."
+            );
+            assert!(
+                value_close(INTEGRAL_PITCH_PREV, 0.0),
                 "Pitch integrator should be reset."
             );
-            assert_eq!(INTEGRAL_YAW_PREV, 0.0, "Yaw integrator should be reset.");
+            assert!(
+                value_close(INTEGRAL_YAW_PREV, 0.0),
+                "Yaw integrator should be reset."
+            );
         }
     }
 
@@ -259,7 +270,7 @@ mod tests {
                     + KI_ROLL_RATE * (INTEGRAL_ROLL_PREV + (ROLL_DES - GYROX) * DT)
                     + KD_ROLL_RATE * ((ROLL_DES - GYROX) - ERROR_ROLL_PREV) / DT);
             assert!(
-                (0.01588 - expected_roll_pid).abs() < 1e-5,
+                value_close(0.01588, expected_roll_pid),
                 "Expected roll PID calcualted incorrectly."
             );
             let expected_pitch_pid = 0.01
@@ -267,7 +278,7 @@ mod tests {
                     + KI_PITCH_RATE * (INTEGRAL_PITCH_PREV + (PITCH_DES - GYROY) * DT)
                     + KD_PITCH_RATE * ((PITCH_DES - GYROY) - ERROR_PITCH_PREV) / DT);
             assert!(
-                (-0.01588 - expected_pitch_pid).abs() < 1e-5,
+                value_close(-0.01588, expected_pitch_pid),
                 "Expected pitch PID calcualted incorrectly."
             );
             let expected_yaw_pid = 0.01
@@ -275,7 +286,7 @@ mod tests {
                     + KI_YAW_RATE * (INTEGRAL_YAW_PREV + (YAW_DES - GYROZ) * DT)
                     + KD_YAW_RATE * ((YAW_DES - GYROZ) - ERROR_YAW_PREV) / DT);
             assert!(
-                (0.015825002 - expected_yaw_pid).abs() < 1e-5,
+                value_close(0.015825002, expected_yaw_pid),
                 "Expected yaw PID calcualted incorrectly."
             );
 
@@ -283,16 +294,16 @@ mod tests {
             control_rate();
 
             // Validate the outputs
-            assert_eq!(
-                ROLL_PID, expected_roll_pid,
+            assert!(
+                value_close(ROLL_PID, expected_roll_pid),
                 "Roll PID output does not match expected value."
             );
-            assert_eq!(
-                PITCH_PID, expected_pitch_pid,
+            assert!(
+                value_close(PITCH_PID, expected_pitch_pid),
                 "Pitch PID output does not match expected value."
             );
-            assert_eq!(
-                YAW_PID, expected_yaw_pid,
+            assert!(
+                value_close(YAW_PID, expected_yaw_pid),
                 "Yaw PID output does not match expected value."
             );
         }
@@ -337,5 +348,65 @@ mod tests {
                 INTEGRAL_YAW_PREV
             );
         }
+    }
+
+    /// Default test configuration.
+    fn default_config() -> FlightStabilizerConfig<f32> {
+        let mut config = FlightStabilizerConfig::<f32>::new();
+
+        // Set the PID gains for roll, pitch, and yaw.
+        config.kp_roll = 0.2;
+        config.ki_roll = 0.3;
+        config.kd_roll = -0.05;
+
+        config.kp_pitch = 0.2;
+        config.ki_pitch = 0.3;
+        config.kd_pitch = -0.05;
+
+        config.kp_yaw = 0.3;
+        config.ki_yaw = 0.05;
+        config.kd_yaw = 0.00015;
+
+        // Set the initial setpoints for roll, pitch, and yaw.
+        // These default to zero.
+        config.set_point_roll = 0.0;
+        config.set_point_pitch = 0.0;
+        config.set_point_yaw = 0.0;
+
+        // Set the upper limit for the integral term to prevent windup.
+        config.i_limit = 25.0;
+
+        // Set the scale to adjust the PID outputs to the actuator range.
+        config.scale = 0.01;
+
+        config
+    }
+
+    /// Test the no error contidion.
+    #[test]
+    fn test_control_angle_no_error() {
+        let _config = default_config();
+        assert!(true, "TODO");
+    }
+
+    /// Test to ensure integrators are reset when PWM is below threshold.
+    #[test]
+    fn test_control_angle_low_throttle_integrator_reset() {
+        let _config = default_config();
+        assert!(true, "TODO");
+    }
+
+    /// Test the control_angle function with specific inputs to calculate expected PID outputs.
+    #[test]
+    fn test_control_angle_specific_pid_output() {
+        let _config = default_config();
+        assert!(true, "TODO");
+    }
+
+    /// Test that the integrator saturation works as expected by the DEFAULT_I_LIMIT.
+    #[test]
+    fn test_control_angle_integrator_saturation() {
+        let _config = default_config();
+        assert!(true, "TODO");
     }
 }

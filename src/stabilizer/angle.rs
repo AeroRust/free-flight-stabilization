@@ -44,8 +44,8 @@
 //! and validation mechanisms. Additionally, exploring the use of Rust's async capabilities might provide
 //! avenues for safer and more efficient concurrency models in multi-threaded or interrupt-driven contexts.
 
+use crate::pid::{compute_angle, compute_rate, AngleControlData, RateControlData};
 use crate::{FlightStabilizer, FlightStabilizerConfig, Number};
-use crate::pid::{AngleControlData, compute_angle, compute_rate, RateControlData};
 use piddiy::PidController;
 
 /// Struct representing the Angle PID Flight Stabilization Controller.
@@ -258,18 +258,7 @@ pub unsafe fn control_angle() {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const TEST_ERROR: f32 = 1e-5;
-
-    fn values_close(target: f32, value: f32) -> bool {
-        (target - value).abs() < TEST_ERROR
-    }
-
-    fn vectors_close(target: (f32, f32, f32), value: (f32, f32, f32)) -> bool {
-        (target.0 - value.0).abs() < TEST_ERROR
-            && (target.1 - value.1).abs() < TEST_ERROR
-            && (target.2 - value.2).abs() < TEST_ERROR
-    }
+    use crate::test_utils::*;
 
     fn legacy_reset_initial_conditions() {
         unsafe {
@@ -328,15 +317,15 @@ mod tests {
 
             // Check if the PID outputs are as expected
             assert!(
-                values_close(0.0, ROLL_PID),
+                value_close(0.0, ROLL_PID),
                 "Roll PID should be zero as there is no error."
             );
             assert!(
-                values_close(0.0, PITCH_PID),
+                value_close(0.0, PITCH_PID),
                 "Pitch PID should be zero as there is no error."
             );
             assert!(
-                values_close(0.0, YAW_PID),
+                value_close(0.0, YAW_PID),
                 "Yaw PID should be zero as there is no error."
             );
         }
@@ -361,15 +350,15 @@ mod tests {
 
             // Verify that integrators are reset
             assert!(
-                values_close(0.0, INTEGRAL_ROLL_PREV),
+                value_close(0.0, INTEGRAL_ROLL_PREV),
                 "Roll integrator should be reset."
             );
             assert!(
-                values_close(0.0, INTEGRAL_PITCH_PREV),
+                value_close(0.0, INTEGRAL_PITCH_PREV),
                 "Pitch integrator should be reset."
             );
             assert!(
-                values_close(0.0, INTEGRAL_YAW_PREV),
+                value_close(0.0, INTEGRAL_YAW_PREV),
                 "Yaw integrator should be reset."
             );
         }
@@ -405,7 +394,7 @@ mod tests {
                     + DEFAULT_KI_ROLL_ANGLE * (INTEGRAL_ROLL_PREV + (ROLL_DES - ROLL_IMU) * DT)
                     - DEFAULT_KD_ROLL_ANGLE * GYROX);
             assert!(
-                values_close(0.01025, expected_roll_pid),
+                value_close(0.01025, expected_roll_pid),
                 "Expected roll PID calcualted incorrectly."
             );
             let expected_pitch_pid = 0.01
@@ -414,7 +403,7 @@ mod tests {
                         * (INTEGRAL_PITCH_PREV + (PITCH_DES - PITCH_IMU) * DT)
                     - DEFAULT_KD_PITCH_ANGLE * GYROY);
             assert!(
-                values_close(-0.01025, expected_pitch_pid),
+                value_close(-0.01025, expected_pitch_pid),
                 "Expected pitch PID calcualted incorrectly."
             );
             let expected_yaw_pid = 0.01
@@ -422,7 +411,7 @@ mod tests {
                     + DEFAULT_KI_YAW_RATE * (INTEGRAL_YAW_PREV + (YAW_DES - GYROZ) * DT)
                     + DEFAULT_KD_YAW_RATE * ((YAW_DES - GYROZ) - ERROR_YAW_PREV) / DT);
             assert!(
-                values_close(0.034805, expected_yaw_pid),
+                value_close(0.034805, expected_yaw_pid),
                 "Expected yaw PID calcualted incorrectly."
             );
 
@@ -549,7 +538,7 @@ mod tests {
         let expected_output = (0.0, 0.0, 0.0);
 
         assert!(
-            vectors_close(expected_output, output),
+            vector_close(expected_output, output),
             "Outputs should be zero as there is no error."
         );
     }
@@ -576,7 +565,7 @@ mod tests {
         let expected_output = (0.01025, -0.01025, 0.034805);
 
         assert!(
-            vectors_close(expected_output, output),
+            vector_close(expected_output, output),
             "PID outputs should match specific values."
         );
     }
@@ -595,17 +584,15 @@ mod tests {
 
         // Allow integrators to build up
         let _ = stabilizer.control(set_point, imu_attitude, gyro_rate, dt, false);
-        assert!(
-            0.0 != stabilizer.roll_pid.integral,
-            "Roll integral should be non-zero."
+        let integrals = (
+            stabilizer.roll_pid.integral,
+            stabilizer.pitch_pid.integral,
+            stabilizer.yaw_pid.integral,
         );
+        let unexpected_integrals = (0.0, 0.0, 0.0);
         assert!(
-            0.0 != stabilizer.pitch_pid.integral,
-            "Pitch integral should be non-zero."
-        );
-        assert!(
-            0.0 != stabilizer.yaw_pid.integral,
-            "Yaw integral should be non-zero."
+            vector_not_close(unexpected_integrals, integrals),
+            "Integrals should not be zero."
         );
 
         // Apply low throttle, which should reset integrators
@@ -617,7 +604,7 @@ mod tests {
         );
         let expected_integrals = (0.0, 0.0, 0.0);
         assert!(
-            vectors_close(expected_integrals, integrals),
+            vector_close(expected_integrals, integrals),
             "Integrals should be zero."
         );
     }
@@ -647,7 +634,7 @@ mod tests {
         );
         let expected_integrals = (config.i_limit, -config.i_limit, config.i_limit);
         assert!(
-            vectors_close(expected_integrals, integrals),
+            vector_close(expected_integrals, integrals),
             "Integrals should be capped."
         );
     }

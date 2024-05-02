@@ -43,12 +43,7 @@ pub fn compute_angle<T: Number>(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const TEST_ERROR: f32 = 1e-5;
-
-    fn values_close(expected: f32, actual: f32) -> bool {
-        (expected - actual).abs() < TEST_ERROR
-    }
+    use crate::test_utils::*;
 
     /// Test that the integral term is clamped to the specified limit.
     #[test]
@@ -74,7 +69,7 @@ mod tests {
 
         let (_, integral, _) = compute_angle(&mut pid, data);
         assert!(
-            values_close(100.0, integral),
+            value_close(100.0, integral),
             "Integral should be clamped to 100."
         );
     }
@@ -109,11 +104,11 @@ mod tests {
         let _ = pid.compute(data);
 
         assert!(
-            values_close(integral_first, 10.0),
+            value_close(integral_first, 10.0),
             "Integral before reset should accumulate."
         );
         assert!(
-            values_close(integral_reset, 0.0),
+            value_close(integral_reset, 0.0),
             "Integral after reset should be zero."
         );
     }
@@ -138,14 +133,14 @@ mod tests {
         let (error, integral, derivative) = compute_angle(&mut pid, data);
         let output = pid.compute(data);
 
-        assert!(values_close(10.0, error), "Error should be 10.");
+        assert!(value_close(10.0, error), "Error should be 10.");
         assert!(
-            values_close(10.0, integral),
+            value_close(10.0, integral),
             "Integral should start to accumulate."
         );
-        assert!(values_close(0.0, derivative), "Derivative should be zero.");
+        assert!(value_close(0.0, derivative), "Derivative should be zero.");
         assert!(
-            values_close(20.0, output),
+            value_close(20.0, output),
             "Output should be the sum of terms."
         );
 
@@ -153,7 +148,7 @@ mod tests {
         let (_, integral_second, _) = compute_angle(&mut pid, data);
         let _ = pid.compute(data);
         assert!(
-            values_close(20.0, integral_second),
+            value_close(20.0, integral_second),
             "Integral should accumulate to 20."
         );
     }
@@ -178,14 +173,14 @@ mod tests {
         let (error, integral, derivative) = compute_angle(&mut pid, data);
         let output = pid.compute(data);
 
-        assert!(values_close(5.0, error), "Error should be 5.");
+        assert!(value_close(5.0, error), "Error should be 5.");
         assert!(
-            values_close(5.0, integral),
+            value_close(5.0, integral),
             "Integral should start to accumulate."
         );
-        assert!(values_close(7.0, derivative), "Derivative should 7.");
+        assert!(value_close(7.0, derivative), "Derivative should 7.");
         assert!(
-            values_close(17.0, output),
+            value_close(17.0, output),
             "Output should be the sum of terms."
         );
 
@@ -193,7 +188,7 @@ mod tests {
         let (_, integral_second, _) = compute_angle(&mut pid, data);
         let _ = pid.compute(data);
         assert!(
-            values_close(10.0, integral_second),
+            value_close(10.0, integral_second),
             "Integral should accumulate to 20."
         );
     }
@@ -217,9 +212,9 @@ mod tests {
         let (error, integral, derivative) = compute_angle(&mut pid, data);
         let output = pid.compute(data);
 
-        assert!(values_close(0.0, error), "Error should be zero.");
-        assert!(values_close(0.0, integral), "Integral should be zero.");
-        assert!(values_close(0.0, derivative), "Derivative should be zero.");
-        assert!(values_close(0.0, output), "Output should be zero.");
+        assert!(value_close(0.0, error), "Error should be zero.");
+        assert!(value_close(0.0, integral), "Integral should be zero.");
+        assert!(value_close(0.0, derivative), "Derivative should be zero.");
+        assert!(value_close(0.0, output), "Output should be zero.");
     }
 }

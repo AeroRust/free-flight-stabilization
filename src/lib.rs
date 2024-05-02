@@ -19,3 +19,6 @@
 pub mod pid;
 pub mod stabilizer;
 pub use stabilizer::*;
+
+#[cfg(test)]
+mod test_utils;

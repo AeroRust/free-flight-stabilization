@@ -71,11 +71,11 @@ impl<T: Number> FlightStabilizerConfig<T> {
     /// // Set the PID gains for roll, pitch, and yaw.
     /// config.kp_roll = 0.2;
     /// config.ki_roll = 0.3;
-    /// config.kd_roll = 0.05;
+    /// config.kd_roll = -0.05;
     ///
     /// config.kp_pitch = 0.2;
     /// config.ki_pitch = 0.3;
-    /// config.kd_pitch = 0.05;
+    /// config.kd_pitch = -0.05;
     ///
     /// config.kp_yaw = 0.3;
     /// config.ki_yaw = 0.05;
@@ -91,7 +91,7 @@ impl<T: Number> FlightStabilizerConfig<T> {
     /// config.i_limit = 25.0;
     ///
     /// // Set the scale to adjust the PID outputs to the actuator range.
-    /// config.scale = 0.1;
+    /// config.scale = 0.01;
     ///
     /// // The configuration is ready to use.
     /// use pid_flight_stabilization::stabilizer::angle::AngleStabilizer;
