@@ -1,4 +1,4 @@
-// src/controller.rs
+// src/stabilizer.rs
 
 //! # PID-based Flight Stabilization Controller
 //!
@@ -44,7 +44,14 @@
 //! and validation mechanisms. Additionally, exploring the use of Rust's async capabilities might provide
 //! avenues for safer and more efficient concurrency models in multi-threaded or interrupt-driven contexts.
 
-pub mod angle;
-pub mod angle2;
-pub mod rate;
+// flight stabilizer trait
+pub mod flight_stabilizer;
+pub use flight_stabilizer::*;
 
+// flight stabilizer implementations
+pub mod angle;
+pub use angle::*;
+pub mod angle2;
+pub use angle2::*;
+pub mod rate;
+pub use rate::*;

@@ -16,4 +16,6 @@
 #![no_std]
 #![deny(missing_docs)]
 
-pub mod controller;
+pub mod pid;
+pub mod stabilizer;
+pub use stabilizer::*;

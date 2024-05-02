@@ -6,4 +6,6 @@ version = "0.1.1"
 edition = "2021"
 
 [dependencies]
+num-traits = "0.2.18"
+piddiy = "0.1.1"
 
