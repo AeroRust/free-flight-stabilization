@@ -150,7 +150,7 @@ impl<T: Number> FlightStabilizer<T> for RateStabilizer<T> {
 static mut DT: f32 = 0.01; // Initial default value
 
 // Integrator limit
-const I_LIMIT: f32 = 25.0;
+static I_LIMIT: f32 = 25.0;
 
 // PID Coefficients for Rate Control
 static KP_ROLL_RATE: f32 = 0.15;
@@ -167,7 +167,10 @@ static KD_YAW_RATE: f32 = 0.00015;
 static mut GYROX: f32 = 0.0;
 static mut GYROY: f32 = 0.0;
 static mut GYROZ: f32 = 0.0;
+
+// Throttle Variables
 static mut CHANNEL_1_PWM: u16 = 1000;
+static LOW_THROTTLE_LIMIT: u16 = 1060;
 
 // Set Points
 static mut ROLL_DES: f32 = 0.0;
@@ -178,26 +181,29 @@ static mut YAW_DES: f32 = 0.0;
 static mut ROLL_PID: f32 = 0.0;
 static mut PITCH_PID: f32 = 0.0;
 static mut YAW_PID: f32 = 0.0;
+static OUTPUT_SCALE: f32 = 0.01;
+
+// Previous state for errors
+static mut ERROR_ROLL_PREV: f32 = 0.0;
+static mut ERROR_PITCH_PREV: f32 = 0.0;
+static mut ERROR_YAW_PREV: f32 = 0.0;
 
 // Previous state for integrators
 static mut INTEGRAL_ROLL_PREV: f32 = 0.0;
-static mut ERROR_ROLL_PREV: f32 = 0.0;
 static mut INTEGRAL_PITCH_PREV: f32 = 0.0;
-static mut ERROR_PITCH_PREV: f32 = 0.0;
 static mut INTEGRAL_YAW_PREV: f32 = 0.0;
-static mut ERROR_YAW_PREV: f32 = 0.0;
 
 /// PID control for rate stabilization.
 pub unsafe fn control_rate() {
     // Roll control
     let error_roll = ROLL_DES - GYROX;
     let mut integral_roll = INTEGRAL_ROLL_PREV + error_roll * DT;
-    if CHANNEL_1_PWM < 1060 {
+    if CHANNEL_1_PWM < LOW_THROTTLE_LIMIT {
         integral_roll = 0.0; // Prevent integrator buildup if throttle is too low
     }
     integral_roll = integral_roll.clamp(-I_LIMIT, I_LIMIT);
     let derivative_roll = (error_roll - ERROR_ROLL_PREV) / DT;
-    ROLL_PID = 0.01
+    ROLL_PID = OUTPUT_SCALE
         * (KP_ROLL_RATE * error_roll
             + KI_ROLL_RATE * integral_roll
             + KD_ROLL_RATE * derivative_roll);
@@ -205,12 +211,12 @@ pub unsafe fn control_rate() {
     // Pitch control
     let error_pitch = PITCH_DES - GYROY;
     let mut integral_pitch = INTEGRAL_PITCH_PREV + error_pitch * DT;
-    if CHANNEL_1_PWM < 1060 {
+    if CHANNEL_1_PWM < LOW_THROTTLE_LIMIT {
         integral_pitch = 0.0; // Prevent integrator buildup if throttle is too low
     }
     integral_pitch = integral_pitch.clamp(-I_LIMIT, I_LIMIT);
     let derivative_pitch = (error_pitch - ERROR_PITCH_PREV) / DT;
-    PITCH_PID = 0.01
+    PITCH_PID = OUTPUT_SCALE
         * (KP_PITCH_RATE * error_pitch
             + KI_PITCH_RATE * integral_pitch
             + KD_PITCH_RATE * derivative_pitch);
@@ -218,12 +224,12 @@ pub unsafe fn control_rate() {
     // Yaw control, stabilize on rate from GYROZ
     let error_yaw = YAW_DES - GYROZ;
     let mut integral_yaw = INTEGRAL_YAW_PREV + error_yaw * DT;
-    if CHANNEL_1_PWM < 1060 {
+    if CHANNEL_1_PWM < LOW_THROTTLE_LIMIT {
         integral_yaw = 0.0; // Prevent integrator buildup if throttle is too low
     }
     integral_yaw = integral_yaw.clamp(-I_LIMIT, I_LIMIT);
     let derivative_yaw = (error_yaw - ERROR_YAW_PREV) / DT;
-    YAW_PID = 0.01
+    YAW_PID = OUTPUT_SCALE
         * (KP_YAW_RATE * error_yaw + KI_YAW_RATE * integral_yaw + KD_YAW_RATE * derivative_yaw);
 
     // Update previous states for next iteration
@@ -368,7 +374,7 @@ mod tests {
             INTEGRAL_YAW_PREV = 0.1;
 
             // Expected PID calculations
-            let expected_roll_pid = 0.01
+            let expected_roll_pid = OUTPUT_SCALE
                 * (KP_ROLL_RATE * (ROLL_DES - GYROX)
                     + KI_ROLL_RATE * (INTEGRAL_ROLL_PREV + (ROLL_DES - GYROX) * DT)
                     + KD_ROLL_RATE * ((ROLL_DES - GYROX) - ERROR_ROLL_PREV) / DT);
@@ -376,7 +382,7 @@ mod tests {
                 value_close(0.01588, expected_roll_pid),
                 "Expected roll PID calcualted incorrectly."
             );
-            let expected_pitch_pid = 0.01
+            let expected_pitch_pid = OUTPUT_SCALE
                 * (KP_PITCH_RATE * (PITCH_DES - GYROY)
                     + KI_PITCH_RATE * (INTEGRAL_PITCH_PREV + (PITCH_DES - GYROY) * DT)
                     + KD_PITCH_RATE * ((PITCH_DES - GYROY) - ERROR_PITCH_PREV) / DT);
@@ -384,7 +390,7 @@ mod tests {
                 value_close(-0.01588, expected_pitch_pid),
                 "Expected pitch PID calcualted incorrectly."
             );
-            let expected_yaw_pid = 0.01
+            let expected_yaw_pid = OUTPUT_SCALE
                 * (KP_YAW_RATE * (YAW_DES - GYROZ)
                     + KI_YAW_RATE * (INTEGRAL_YAW_PREV + (YAW_DES - GYROZ) * DT)
                     + KD_YAW_RATE * ((YAW_DES - GYROZ) - ERROR_YAW_PREV) / DT);
@@ -462,9 +468,9 @@ mod tests {
         config.ki_roll = 0.2;
         config.kd_roll = 0.0002;
 
-        config.kp_pitch = 0.15;
-        config.ki_pitch = 0.2;
-        config.kd_pitch = 0.0002;
+        config.kp_pitch = config.kp_roll;
+        config.ki_pitch = config.ki_roll;
+        config.kd_pitch = config.kd_roll;
 
         config.kp_yaw = 0.3;
         config.ki_yaw = 0.05;

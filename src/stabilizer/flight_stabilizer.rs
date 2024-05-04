@@ -59,12 +59,12 @@ pub struct FlightStabilizerConfig<T: Number> {
 
 impl<T: Number> FlightStabilizerConfig<T> {
     /// Creates a new configuration with default values for all parameters.
-    /// Default values are zero or one are used.
+    /// Default values of zero or one are used.
     /// These should be replaced meaningful values that are tuned for the hardware.
     ///
     /// Example Usage
     /// ```
-    /// use pid_flight_stabilization::stabilizer::flight_stabilizer::FlightStabilizerConfig;
+    /// use pid_flight_stabilization::FlightStabilizerConfig;
     ///
     /// let mut config = FlightStabilizerConfig::<f32>::new();
     ///
@@ -94,7 +94,7 @@ impl<T: Number> FlightStabilizerConfig<T> {
     /// config.scale = 0.01;
     ///
     /// // The configuration is ready to use.
-    /// use pid_flight_stabilization::stabilizer::angle::AngleStabilizer;
+    /// use pid_flight_stabilization::AngleStabilizer;
     ///
     /// let flight_stabilizer = AngleStabilizer::with_config(config);
     /// ```
@@ -114,6 +114,47 @@ impl<T: Number> FlightStabilizerConfig<T> {
             set_point_yaw: T::zero(),
             i_limit: T::one(),
             scale: T::one(),
+        }
+    }
+}
+
+/// Configuration for PID cascade blending.
+#[derive(Clone, Copy)]
+pub struct CascadeBlendingConfig<T: Number> {
+    /// Blending weight.
+    pub beta: T,
+    /// Pre-blend gain.
+    pub k: T,
+    /// Pre-blend scaling limit.
+    pub limit: T,
+}
+
+impl<T: Number> CascadeBlendingConfig<T> {
+    /// Creates a new configuration with default values for all blending parameters.
+    /// Default values of one are used.
+    /// These should be replaced meaningful values that are tuned for the hardware.
+    ///
+    /// Example Usage
+    /// ```
+    /// use pid_flight_stabilization::CascadeBlendingConfig;
+    ///
+    /// let mut blending_config = CascadeBlendingConfig::<f32>::new();
+    /// blending_config.k = 30.0;
+    /// blending_config.beta = 0.9;
+    /// blending_config.limit = 240.0;
+    ///
+    /// // The configuration is ready to use.
+    /// use pid_flight_stabilization::{Angle2Stabilizer, FlightStabilizerConfig};
+    /// let angle_config = FlightStabilizerConfig::<f32>::new();
+    /// let rate_config = FlightStabilizerConfig::<f32>::new();
+    ///
+    /// let flight_stabilizer = Angle2Stabilizer::with_config(angle_config, rate_config, blending_config);
+    /// ```
+    pub fn new() -> Self {
+        Self {
+            beta: T::one(),
+            k: T::one(),
+            limit: T::one(),
         }
     }
 }

@@ -153,18 +153,18 @@ impl<T: Number> FlightStabilizer<T> for AngleStabilizer<T> {
 static mut DT: f32 = 0.01; // Initial default value
 
 // Default PID Coefficients
-const DEFAULT_KP_ROLL_ANGLE: f32 = 0.2;
-const DEFAULT_KI_ROLL_ANGLE: f32 = 0.3;
-const DEFAULT_KD_ROLL_ANGLE: f32 = 0.05;
-const DEFAULT_KP_PITCH_ANGLE: f32 = 0.2;
-const DEFAULT_KI_PITCH_ANGLE: f32 = 0.3;
-const DEFAULT_KD_PITCH_ANGLE: f32 = 0.05;
-const DEFAULT_KP_YAW_RATE: f32 = 0.3;
-const DEFAULT_KI_YAW_RATE: f32 = 0.05;
-const DEFAULT_KD_YAW_RATE: f32 = 0.00015;
+static DEFAULT_KP_ROLL_ANGLE: f32 = 0.2;
+static DEFAULT_KI_ROLL_ANGLE: f32 = 0.3;
+static DEFAULT_KD_ROLL_ANGLE: f32 = 0.05;
+static DEFAULT_KP_PITCH_ANGLE: f32 = 0.2;
+static DEFAULT_KI_PITCH_ANGLE: f32 = 0.3;
+static DEFAULT_KD_PITCH_ANGLE: f32 = 0.05;
+static DEFAULT_KP_YAW_RATE: f32 = 0.3;
+static DEFAULT_KI_YAW_RATE: f32 = 0.05;
+static DEFAULT_KD_YAW_RATE: f32 = 0.00015;
 
 // Integrator limit
-const DEFAULT_I_LIMIT: f32 = 25.0;
+static DEFAULT_I_LIMIT: f32 = 25.0;
 
 // Sensor Variables
 static mut ROLL_IMU: f32 = 0.0;
@@ -172,7 +172,10 @@ static mut PITCH_IMU: f32 = 0.0;
 static mut GYROX: f32 = 0.0;
 static mut GYROY: f32 = 0.0;
 static mut GYROZ: f32 = 0.0;
+
+// Throttle Variables
 static mut CHANNEL_1_PWM: u16 = 1000;
+static LOW_THROTTLE_LIMIT: u16 = 1060;
 
 // Set Points
 static mut ROLL_DES: f32 = 0.0;
@@ -183,12 +186,15 @@ static mut YAW_DES: f32 = 0.0;
 static mut ROLL_PID: f32 = 0.0;
 static mut PITCH_PID: f32 = 0.0;
 static mut YAW_PID: f32 = 0.0;
+static OUTPUT_SCALE: f32 = 0.01;
+
+// Previous state for errors
+static mut ERROR_YAW_PREV: f32 = 0.0;
 
 // Previous state for integrators
 static mut INTEGRAL_ROLL_PREV: f32 = 0.0;
 static mut INTEGRAL_PITCH_PREV: f32 = 0.0;
 static mut INTEGRAL_YAW_PREV: f32 = 0.0;
-static mut ERROR_YAW_PREV: f32 = 0.0;
 
 /// Computes control commands based on state error (angle).
 ///
@@ -207,39 +213,39 @@ pub unsafe fn control_angle() {
     // Roll
     let error_roll = ROLL_DES - ROLL_IMU;
     let mut integral_roll = INTEGRAL_ROLL_PREV + error_roll * DT;
-    if CHANNEL_1_PWM < 1060 {
+    if CHANNEL_1_PWM < LOW_THROTTLE_LIMIT {
         // Avoid integrator buildup if low throttle
         integral_roll = 0.0;
     }
     integral_roll = integral_roll.clamp(-DEFAULT_I_LIMIT, DEFAULT_I_LIMIT); //Saturate integrator to prevent unsafe buildup
     let derivative_roll = GYROX;
-    ROLL_PID = 0.01
+    ROLL_PID = OUTPUT_SCALE
         * (DEFAULT_KP_ROLL_ANGLE * error_roll + DEFAULT_KI_ROLL_ANGLE * integral_roll
             - DEFAULT_KD_ROLL_ANGLE * derivative_roll);
 
     // Pitch
     let error_pitch = PITCH_DES - PITCH_IMU;
     let mut integral_pitch = INTEGRAL_PITCH_PREV + error_pitch * DT;
-    if CHANNEL_1_PWM < 1060 {
+    if CHANNEL_1_PWM < LOW_THROTTLE_LIMIT {
         // Avoid integrator buildup if low throttle
         integral_pitch = 0.0;
     }
     integral_pitch = integral_pitch.clamp(-DEFAULT_I_LIMIT, DEFAULT_I_LIMIT); //Saturate integrator to prevent unsafe buildup
     let derivative_pitch = GYROY;
-    PITCH_PID = 0.01
+    PITCH_PID = OUTPUT_SCALE
         * (DEFAULT_KP_PITCH_ANGLE * error_pitch + DEFAULT_KI_PITCH_ANGLE * integral_pitch
             - DEFAULT_KD_PITCH_ANGLE * derivative_pitch);
 
     // Yaw, stablize on rate from GyroZ
     let error_yaw = YAW_DES - GYROZ;
     let mut integral_yaw = INTEGRAL_YAW_PREV + error_yaw * DT;
-    if CHANNEL_1_PWM < 1060 {
+    if CHANNEL_1_PWM < LOW_THROTTLE_LIMIT {
         // Avoid integrator buildup if low throttle
         integral_yaw = 0.0;
     }
     integral_yaw = integral_yaw.clamp(-DEFAULT_I_LIMIT, DEFAULT_I_LIMIT); //Saturate integrator to prevent unsafe buildup
     let derivative_yaw = (error_yaw - ERROR_YAW_PREV) / DT;
-    YAW_PID = 0.01
+    YAW_PID = OUTPUT_SCALE
         * (DEFAULT_KP_YAW_RATE * error_yaw
             + DEFAULT_KI_YAW_RATE * integral_yaw
             + DEFAULT_KD_YAW_RATE * derivative_yaw);
@@ -263,7 +269,7 @@ mod tests {
     fn legacy_reset_initial_conditions() {
         unsafe {
             // Time step for PID calculation
-            DT = 0.01; // Initial default value
+            DT = 0.01; // , _blending_configInitial default value
 
             // Sensor Variables
             ROLL_IMU = 0.0;
@@ -392,7 +398,7 @@ mod tests {
             INTEGRAL_YAW_PREV = 0.2;
 
             // Expected PID calculations
-            let expected_roll_pid = 0.01
+            let expected_roll_pid = OUTPUT_SCALE
                 * (DEFAULT_KP_ROLL_ANGLE * (ROLL_DES - ROLL_IMU)
                     + DEFAULT_KI_ROLL_ANGLE * (INTEGRAL_ROLL_PREV + (ROLL_DES - ROLL_IMU) * DT)
                     - DEFAULT_KD_ROLL_ANGLE * GYROX);
@@ -400,7 +406,7 @@ mod tests {
                 value_close(0.01025, expected_roll_pid),
                 "Expected roll PID calcualted incorrectly."
             );
-            let expected_pitch_pid = 0.01
+            let expected_pitch_pid = OUTPUT_SCALE
                 * (DEFAULT_KP_PITCH_ANGLE * (PITCH_DES - PITCH_IMU)
                     + DEFAULT_KI_PITCH_ANGLE
                         * (INTEGRAL_PITCH_PREV + (PITCH_DES - PITCH_IMU) * DT)
@@ -409,7 +415,7 @@ mod tests {
                 value_close(-0.01025, expected_pitch_pid),
                 "Expected pitch PID calcualted incorrectly."
             );
-            let expected_yaw_pid = 0.01
+            let expected_yaw_pid = OUTPUT_SCALE
                 * (DEFAULT_KP_YAW_RATE * (YAW_DES - GYROZ)
                     + DEFAULT_KI_YAW_RATE * (INTEGRAL_YAW_PREV + (YAW_DES - GYROZ) * DT)
                     + DEFAULT_KD_YAW_RATE * ((YAW_DES - GYROZ) - ERROR_YAW_PREV) / DT);
@@ -489,9 +495,9 @@ mod tests {
         config.ki_roll = 0.3;
         config.kd_roll = -0.05;
 
-        config.kp_pitch = 0.2;
-        config.ki_pitch = 0.3;
-        config.kd_pitch = -0.05;
+        config.kp_pitch = config.kp_roll;
+        config.ki_pitch = config.ki_roll;
+        config.kd_pitch = config.kd_roll;
 
         config.kp_yaw = 0.3;
         config.ki_yaw = 0.05;
