@@ -44,6 +44,108 @@
 //! and validation mechanisms. Additionally, exploring the use of Rust's async capabilities might provide
 //! avenues for safer and more efficient concurrency models in multi-threaded or interrupt-driven contexts.
 
+use crate::pid::{compute_rate, RateControlData};
+use crate::{FlightStabilizer, FlightStabilizerConfig, Number};
+use piddiy::PidController;
+
+/// Struct representing the Rate PID Flight Stabilization Controller.
+pub struct RateStabilizer<T: Number> {
+    roll_pid: PidController<T, RateControlData<T>>,
+    pitch_pid: PidController<T, RateControlData<T>>,
+    yaw_pid: PidController<T, RateControlData<T>>,
+    i_limit: T,
+    scale: T,
+}
+
+impl<T: Number> RateStabilizer<T> {
+    /// Creates a new controller using the provided configuration
+    pub fn with_config(config: FlightStabilizerConfig<T>) -> Self {
+        let mut roll_pid = PidController::new();
+        roll_pid
+            .compute_fn(compute_rate)
+            .set_point(config.set_point_roll)
+            .kp(config.kp_roll)
+            .ki(config.ki_roll)
+            .kd(config.kd_roll);
+
+        let mut pitch_pid = PidController::new();
+        pitch_pid
+            .compute_fn(compute_rate)
+            .set_point(config.set_point_pitch)
+            .kp(config.kp_pitch)
+            .ki(config.ki_pitch)
+            .kd(config.kd_pitch);
+
+        let mut yaw_pid = PidController::new();
+        yaw_pid
+            .compute_fn(compute_rate)
+            .set_point(config.set_point_yaw)
+            .kp(config.kp_yaw)
+            .ki(config.ki_yaw)
+            .kd(config.kd_yaw);
+
+        RateStabilizer {
+            roll_pid,
+            pitch_pid,
+            yaw_pid,
+            i_limit: config.i_limit,
+            scale: config.scale,
+        }
+    }
+
+    /// Creates a new controller with default settings
+    pub fn new() -> Self {
+        Self::with_config(FlightStabilizerConfig::new())
+    }
+}
+
+impl<T: Number> FlightStabilizer<T> for RateStabilizer<T> {
+    fn control(
+        &mut self,
+        set_point: (T, T, T),
+        _imu_attitude: (T, T, T),
+        gyro_rate: (T, T, T),
+        dt: T,
+        low_throttle: bool,
+    ) -> (T, T, T) {
+        // Set the setpoints for roll, pitch, and yaw
+        let (set_point_roll, set_point_pitch, set_point_yaw) = set_point;
+        self.roll_pid.set_point(set_point_roll);
+        self.pitch_pid.set_point(set_point_pitch);
+        self.yaw_pid.set_point(set_point_yaw);
+
+        // Prepare control data for roll and pitch
+        let (gyro_roll, gyro_pitch, gyro_yaw) = gyro_rate;
+        let roll_data = RateControlData {
+            rate: gyro_roll,
+            dt: dt,
+            integral_limit: self.i_limit,
+            reset_integral: low_throttle,
+        };
+        let pitch_data = RateControlData {
+            rate: gyro_pitch,
+            dt: dt,
+            integral_limit: self.i_limit,
+            reset_integral: low_throttle,
+        };
+
+        // Prepare control data for yaw
+        let yaw_data = RateControlData {
+            rate: gyro_yaw,
+            dt: dt,
+            integral_limit: self.i_limit,
+            reset_integral: low_throttle,
+        };
+
+        // Compute outputs for roll, pitch, and yaw
+        let roll_output = self.scale * self.roll_pid.compute(roll_data);
+        let pitch_output = self.scale * self.pitch_pid.compute(pitch_data);
+        let yaw_output = self.scale * self.yaw_pid.compute(yaw_data);
+
+        (roll_output, pitch_output, yaw_output)
+    }
+}
+
 // Time step for PID calculation, mutable to accommodate dynamic updates
 static mut DT: f32 = 0.01; // Initial default value
 
@@ -137,9 +239,8 @@ pub unsafe fn control_rate() {
 mod tests {
     use super::*;
     use crate::test_utils::*;
-    use crate::FlightStabilizerConfig;
 
-    fn reset_initial_conditions() {
+    fn legacy_reset_initial_conditions() {
         unsafe {
             // Time step for PID calculation
             DT = 0.01; // Initial default value
@@ -160,21 +261,23 @@ mod tests {
             PITCH_PID = 0.0;
             YAW_PID = 0.0;
 
+            // Previous state for errors
+            ERROR_ROLL_PREV = 0.0;
+            ERROR_PITCH_PREV = 0.0;
+            ERROR_YAW_PREV = 0.0;
+
             // Previous state for integrators
             INTEGRAL_ROLL_PREV = 0.0;
-            ERROR_ROLL_PREV = 0.0;
             INTEGRAL_PITCH_PREV = 0.0;
-            ERROR_PITCH_PREV = 0.0;
             INTEGRAL_YAW_PREV = 0.0;
-            ERROR_YAW_PREV = 0.0;
         }
     }
 
     /// Test the no error contidion.
     #[test]
-    fn test_control_rate_no_error() {
+    fn legacy_test_stabilizer_rate_no_error() {
         unsafe {
-            reset_initial_conditions();
+            legacy_reset_initial_conditions();
 
             // Initialize global state
             CHANNEL_1_PWM = 1200; // Above the threshold to allow integrator to build
@@ -211,9 +314,9 @@ mod tests {
 
     /// Test to ensure integrators are reset when PWM is below threshold.
     #[test]
-    fn test_control_rate_low_throttle_integrator_reset() {
+    fn legacy_test_stabilizer_rate_low_throttle_integrator_reset() {
         unsafe {
-            reset_initial_conditions();
+            legacy_reset_initial_conditions();
 
             // Initialize global state with some values
             CHANNEL_1_PWM = 1050; // Below the threshold to prevent integrator buildup
@@ -244,15 +347,15 @@ mod tests {
 
     /// Test the control_angle function with specific inputs to calculate expected PID outputs.
     #[test]
-    fn test_control_rate_specific_pid_output() {
+    fn legacy_test_stabilizer_rate_specific_pid_output() {
         unsafe {
-            reset_initial_conditions();
+            legacy_reset_initial_conditions();
 
             // Set specific test values
             CHANNEL_1_PWM = 1200; // Above the minimum threshold for integrator activity
             GYROX = 1.0; // Simulated rate of change in roll
             GYROY = -1.0; // Simulated rate of change in pitch
-            GYROY = -1.0; // Simulated rate of change in yaw
+            GYROZ = -1.0; // Simulated rate of change in yaw
 
             // Desired angles are set to create a specific error
             ROLL_DES = 10.0; // Desired roll is 5 degrees greater than actual
@@ -286,7 +389,7 @@ mod tests {
                     + KI_YAW_RATE * (INTEGRAL_YAW_PREV + (YAW_DES - GYROZ) * DT)
                     + KD_YAW_RATE * ((YAW_DES - GYROZ) - ERROR_YAW_PREV) / DT);
             assert!(
-                value_close(0.015825002, expected_yaw_pid),
+                value_close(0.01898, expected_yaw_pid),
                 "Expected yaw PID calcualted incorrectly."
             );
 
@@ -311,9 +414,9 @@ mod tests {
 
     /// Test that the integrator saturation works as expected by the I_LIMIT.
     #[test]
-    fn test_control_rate_integrator_saturation() {
+    fn legacy_test_stabilizer_rate_integrator_saturation() {
         unsafe {
-            reset_initial_conditions();
+            legacy_reset_initial_conditions();
 
             // Setup test conditions
             CHANNEL_1_PWM = 1200; // Above the threshold to allow integrator buildup
@@ -355,13 +458,13 @@ mod tests {
         let mut config = FlightStabilizerConfig::<f32>::new();
 
         // Set the PID gains for roll, pitch, and yaw.
-        config.kp_roll = 0.2;
-        config.ki_roll = 0.3;
-        config.kd_roll = -0.05;
+        config.kp_roll = 0.15;
+        config.ki_roll = 0.2;
+        config.kd_roll = 0.0002;
 
-        config.kp_pitch = 0.2;
-        config.ki_pitch = 0.3;
-        config.kd_pitch = -0.05;
+        config.kp_pitch = 0.15;
+        config.ki_pitch = 0.2;
+        config.kd_pitch = 0.0002;
 
         config.kp_yaw = 0.3;
         config.ki_yaw = 0.05;
@@ -382,31 +485,133 @@ mod tests {
         config
     }
 
-    /// Test the no error contidion.
+    /// Test the initialization of the RateStabilizer with a default configuration.
     #[test]
-    fn test_control_angle_no_error() {
-        let _config = default_config();
-        assert!(true, "TODO");
-    }
+    fn test_stabilizer_rate_initialization_with_default_config() {
+        let config = default_config();
+        let stabilizer = RateStabilizer::with_config(config);
 
-    /// Test to ensure integrators are reset when PWM is below threshold.
-    #[test]
-    fn test_control_angle_low_throttle_integrator_reset() {
-        let _config = default_config();
-        assert!(true, "TODO");
-    }
-
-    /// Test the control_angle function with specific inputs to calculate expected PID outputs.
-    #[test]
-    fn test_control_angle_specific_pid_output() {
-        let _config = default_config();
-        assert!(true, "TODO");
+        assert_eq!(stabilizer.roll_pid.kp, config.kp_roll);
+        assert_eq!(stabilizer.pitch_pid.kp, config.kp_pitch);
+        assert_eq!(stabilizer.yaw_pid.kp, config.kp_yaw);
     }
 
     /// Test that the integrator saturation works as expected by the DEFAULT_I_LIMIT.
     #[test]
-    fn test_control_angle_integrator_saturation() {
-        let _config = default_config();
-        assert!(true, "TODO");
+    fn test_stabilizer_rate_integrator_saturation() {
+        let config = default_config();
+        let mut stabilizer = RateStabilizer::with_config(config);
+
+        // Simulated sensor inputs and desired setpoints
+        let set_point = (100.0, -100.0, 50.0); // desired roll, pitch, yaw
+        let imu_attitude = (0.0, 0.0, 0.0); // current roll, pitch, yaw
+        let gyro_rate = (0.0, 0.0, 0.0); // current roll rate, pitch rate, yaw rate
+        let dt = 0.01; // time step
+        let low_throttle = false;
+
+        // Apply consistent error over multiple cycles to force integrator saturation
+        for _ in 0..100 {
+            let _ = stabilizer.control(set_point, imu_attitude, gyro_rate, dt, low_throttle);
+        }
+
+        let integrals = (
+            stabilizer.roll_pid.integral,
+            stabilizer.pitch_pid.integral,
+            stabilizer.yaw_pid.integral,
+        );
+        let expected_integrals = (config.i_limit, -config.i_limit, config.i_limit);
+        assert!(
+            vector_close(expected_integrals, integrals),
+            "Integrals should be capped."
+        );
+    }
+
+    /// Test to ensure integrators are reset when PWM is below threshold.
+    #[test]
+    fn test_stabilizer_rate_low_throttle_integral_reset() {
+        let config = default_config();
+        let mut stabilizer = RateStabilizer::with_config(config);
+
+        // Simulated sensor inputs and desired setpoints
+        let set_point = (10.0, 0.0, 10.0); // desired roll, pitch, yaw
+        let imu_attitude = (5.0, 5.0, 0.0); // current roll, pitch, yaw
+        let gyro_rate = (1.0, -1.0, -1.0); // current roll rate, pitch rate, yaw rate
+        let dt = 0.01; // time step
+
+        // Allow integrators to build up
+        let _ = stabilizer.control(set_point, imu_attitude, gyro_rate, dt, false);
+        let integrals = (
+            stabilizer.roll_pid.integral,
+            stabilizer.pitch_pid.integral,
+            stabilizer.yaw_pid.integral,
+        );
+        let unexpected_integrals = (0.0, 0.0, 0.0);
+        assert!(
+            vector_not_close(unexpected_integrals, integrals),
+            "Integrals should not be zero."
+        );
+
+        // Apply low throttle, which should reset integrators
+        let _ = stabilizer.control(set_point, imu_attitude, gyro_rate, dt, true);
+        let integrals = (
+            stabilizer.roll_pid.integral,
+            stabilizer.pitch_pid.integral,
+            stabilizer.yaw_pid.integral,
+        );
+        let expected_integrals = (0.0, 0.0, 0.0);
+        assert!(
+            vector_close(expected_integrals, integrals),
+            "Integrals should be zero."
+        );
+    }
+
+    /// Test the no error contidion.
+    #[test]
+    fn test_stabilizer_rate_no_error() {
+        let config = default_config();
+        let mut stabilizer = RateStabilizer::with_config(config);
+
+        // Simulated sensor inputs and desired setpoints
+        let set_point = (0.0, 0.0, 0.0); // desired roll, pitch, yaw
+        let imu_attitude = (0.0, 0.0, 0.0); // current roll, pitch, yaw
+        let gyro_rate = (0.0, 0.0, 0.0); // current roll rate, pitch rate, yaw rate
+        let dt = 0.01; // time step
+        let low_throttle = false;
+
+        // Perform the control computation
+        let output = stabilizer.control(set_point, imu_attitude, gyro_rate, dt, low_throttle);
+        let expected_output = (0.0, 0.0, 0.0);
+
+        assert!(
+            vector_close(expected_output, output),
+            "Outputs should be zero as there is no error."
+        );
+    }
+
+    /// Test the control_rate function with specific inputs to calculate expected PID outputs.
+    #[test]
+    fn test_stabilizer_rate_specific_pid_output() {
+        // Set up stabilizer
+        let config = default_config();
+        let mut stabilizer = RateStabilizer::with_config(config);
+        stabilizer.roll_pid.integral = 0.2; // previous integral
+        stabilizer.pitch_pid.integral = -0.2; // previous integral
+        stabilizer.yaw_pid.integral = 0.1; // previous integral
+
+        // Simulated sensor inputs and desired setpoints
+        let set_point = (10.0, -10.0, 5.0); // desired roll, pitch, yaw
+        let imu_attitude = (0.0, 0.0, 0.0); // current roll, pitch, yaw
+        let gyro_rate = (1.0, -1.0, -1.0); // current roll rate, pitch rate, yaw rate
+        let dt = 0.01; // time step
+        let low_throttle = false;
+
+        // Perform the control computation
+        let output = stabilizer.control(set_point, imu_attitude, gyro_rate, dt, low_throttle);
+        let expected_output = (0.01588, -0.01588, 0.01898);
+
+        assert!(
+            vector_close(expected_output, output),
+            "PID outputs should match specific values."
+        );
     }
 }

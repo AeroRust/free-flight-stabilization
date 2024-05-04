@@ -283,6 +283,9 @@ mod tests {
             PITCH_PID = 0.0;
             YAW_PID = 0.0;
 
+            // Previous state for errors
+            ERROR_YAW_PREV = 0.0;
+
             // Previous state for integrators
             INTEGRAL_ROLL_PREV = 0.0;
             INTEGRAL_PITCH_PREV = 0.0;
@@ -292,7 +295,7 @@ mod tests {
 
     /// Test the no error contidion.
     #[test]
-    fn legacy_test_control_angle_no_error() {
+    fn legacy_test_stabilizer_angle_no_error() {
         unsafe {
             legacy_reset_initial_conditions();
 
@@ -333,7 +336,7 @@ mod tests {
 
     /// Test to ensure integrators are reset when PWM is below threshold.
     #[test]
-    fn legacy_test_control_angle_low_throttle_integrator_reset() {
+    fn legacy_test_stabilizer_angle_low_throttle_integrator_reset() {
         unsafe {
             legacy_reset_initial_conditions();
 
@@ -366,7 +369,7 @@ mod tests {
 
     /// Test the control_angle function with specific inputs to calculate expected PID outputs.
     #[test]
-    fn legacy_test_control_angle_specific_pid_output() {
+    fn legacy_test_stabilizer_angle_specific_pid_output() {
         unsafe {
             legacy_reset_initial_conditions();
 
@@ -436,7 +439,7 @@ mod tests {
 
     /// Test that the integrator saturation works as expected by the DEFAULT_I_LIMIT.
     #[test]
-    fn legacy_test_control_angle_integrator_saturation() {
+    fn legacy_test_stabilizer_angle_integrator_saturation() {
         unsafe {
             legacy_reset_initial_conditions();
 
@@ -511,13 +514,82 @@ mod tests {
 
     /// Test the initialization of the AngleStabilizer with a default configuration.
     #[test]
-    fn test_initialization_with_default_config() {
+    fn test_stabilizer_angle_initialization_with_default_config() {
         let config = default_config();
         let stabilizer = AngleStabilizer::with_config(config);
 
         assert_eq!(stabilizer.roll_pid.kp, config.kp_roll);
         assert_eq!(stabilizer.pitch_pid.kp, config.kp_pitch);
         assert_eq!(stabilizer.yaw_pid.kp, config.kp_yaw);
+    }
+
+    /// Test that the integrator saturation works as expected by the DEFAULT_I_LIMIT.
+    #[test]
+    fn test_stabilizer_angle_integrator_saturation() {
+        let config = default_config();
+        let mut stabilizer = AngleStabilizer::with_config(config);
+
+        // Simulated sensor inputs and desired setpoints
+        let set_point = (100.0, -100.0, 50.0); // desired roll, pitch, yaw
+        let imu_attitude = (0.0, 0.0, 0.0); // current roll, pitch, yaw
+        let gyro_rate = (0.0, 0.0, 0.0); // current roll rate, pitch rate, yaw rate
+        let dt = 0.01; // time step
+        let low_throttle = false;
+
+        // Apply consistent error over multiple cycles to force integrator saturation
+        for _ in 0..100 {
+            let _ = stabilizer.control(set_point, imu_attitude, gyro_rate, dt, low_throttle);
+        }
+
+        let integrals = (
+            stabilizer.roll_pid.integral,
+            stabilizer.pitch_pid.integral,
+            stabilizer.yaw_pid.integral,
+        );
+        let expected_integrals = (config.i_limit, -config.i_limit, config.i_limit);
+        assert!(
+            vector_close(expected_integrals, integrals),
+            "Integrals should be capped."
+        );
+    }
+
+    /// Test to ensure integrators are reset when PWM is below threshold.
+    #[test]
+    fn test_stabilizer_angle_low_throttle_integral_reset() {
+        let config = default_config();
+        let mut stabilizer = AngleStabilizer::with_config(config);
+
+        // Simulated sensor inputs and desired setpoints
+        let set_point = (10.0, 0.0, 10.0); // desired roll, pitch, yaw
+        let imu_attitude = (5.0, 5.0, 0.0); // current roll, pitch, yaw
+        let gyro_rate = (1.0, -1.0, -1.0); // current roll rate, pitch rate, yaw rate
+        let dt = 0.01; // time step
+
+        // Allow integrators to build up
+        let _ = stabilizer.control(set_point, imu_attitude, gyro_rate, dt, false);
+        let integrals = (
+            stabilizer.roll_pid.integral,
+            stabilizer.pitch_pid.integral,
+            stabilizer.yaw_pid.integral,
+        );
+        let unexpected_integrals = (0.0, 0.0, 0.0);
+        assert!(
+            vector_not_close(unexpected_integrals, integrals),
+            "Integrals should not be zero."
+        );
+
+        // Apply low throttle, which should reset integrators
+        let _ = stabilizer.control(set_point, imu_attitude, gyro_rate, dt, true);
+        let integrals = (
+            stabilizer.roll_pid.integral,
+            stabilizer.pitch_pid.integral,
+            stabilizer.yaw_pid.integral,
+        );
+        let expected_integrals = (0.0, 0.0, 0.0);
+        assert!(
+            vector_close(expected_integrals, integrals),
+            "Integrals should be zero."
+        );
     }
 
     /// Test the no error contidion.
@@ -567,75 +639,6 @@ mod tests {
         assert!(
             vector_close(expected_output, output),
             "PID outputs should match specific values."
-        );
-    }
-
-    /// Test to ensure integrators are reset when PWM is below threshold.
-    #[test]
-    fn test_stabilizer_angle_low_throttle_integral_reset() {
-        let config = default_config();
-        let mut stabilizer = AngleStabilizer::with_config(config);
-
-        // Simulated sensor inputs and desired setpoints
-        let set_point = (10.0, 0.0, 10.0); // desired roll, pitch, yaw
-        let imu_attitude = (5.0, 5.0, 0.0); // current roll, pitch, yaw
-        let gyro_rate = (1.0, -1.0, -1.0); // current roll rate, pitch rate, yaw rate
-        let dt = 0.01; // time step
-
-        // Allow integrators to build up
-        let _ = stabilizer.control(set_point, imu_attitude, gyro_rate, dt, false);
-        let integrals = (
-            stabilizer.roll_pid.integral,
-            stabilizer.pitch_pid.integral,
-            stabilizer.yaw_pid.integral,
-        );
-        let unexpected_integrals = (0.0, 0.0, 0.0);
-        assert!(
-            vector_not_close(unexpected_integrals, integrals),
-            "Integrals should not be zero."
-        );
-
-        // Apply low throttle, which should reset integrators
-        let _ = stabilizer.control(set_point, imu_attitude, gyro_rate, dt, true);
-        let integrals = (
-            stabilizer.roll_pid.integral,
-            stabilizer.pitch_pid.integral,
-            stabilizer.yaw_pid.integral,
-        );
-        let expected_integrals = (0.0, 0.0, 0.0);
-        assert!(
-            vector_close(expected_integrals, integrals),
-            "Integrals should be zero."
-        );
-    }
-
-    /// Test that the integrator saturation works as expected by the DEFAULT_I_LIMIT.
-    #[test]
-    fn test_stabilizer_angle_integrator_saturation() {
-        let config = default_config();
-        let mut stabilizer = AngleStabilizer::with_config(config);
-
-        // Simulated sensor inputs and desired setpoints
-        let set_point = (100.0, -100.0, 50.0); // desired roll, pitch, yaw
-        let imu_attitude = (0.0, 0.0, 0.0); // current roll, pitch, yaw
-        let gyro_rate = (0.0, 0.0, 0.0); // current roll rate, pitch rate, yaw rate
-        let dt = 0.01; // time step
-        let low_throttle = false;
-
-        // Apply consistent error over multiple cycles to force integrator saturation
-        for _ in 0..100 {
-            let _ = stabilizer.control(set_point, imu_attitude, gyro_rate, dt, low_throttle);
-        }
-
-        let integrals = (
-            stabilizer.roll_pid.integral,
-            stabilizer.pitch_pid.integral,
-            stabilizer.yaw_pid.integral,
-        );
-        let expected_integrals = (config.i_limit, -config.i_limit, config.i_limit);
-        assert!(
-            vector_close(expected_integrals, integrals),
-            "Integrals should be capped."
         );
     }
 }
