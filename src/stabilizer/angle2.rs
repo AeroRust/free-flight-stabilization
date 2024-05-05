@@ -7,15 +7,15 @@
 //! It requires three configuration files- one of the angle-based PID,
 //! one for the rate-based PID, and one for the blending.
 
-use crate::pid::{compute_angle, compute_rate, AngleControlData, RateControlData};
+use crate::pid::{compute_cascade_angle, compute_rate, CascadeAngleControlData, RateControlData};
 use crate::{CascadeBlendingConfig, FlightStabilizer, FlightStabilizerConfig, Number};
 use piddiy::PidController;
 
 /// Struct representing the Angle2 PID Flight Stabilization Controller.
 /// This is a cascade PID controller that combines angle and rate.
 pub struct Angle2Stabilizer<T: Number> {
-    angle_roll_pid: PidController<T, AngleControlData<T>>,
-    angle_pitch_pid: PidController<T, AngleControlData<T>>,
+    angle_roll_pid: PidController<T, CascadeAngleControlData<T>>,
+    angle_pitch_pid: PidController<T, CascadeAngleControlData<T>>,
     angle_i_limit: T,
     angle_scale: T,
     rate_roll_pid: PidController<T, RateControlData<T>>,
@@ -41,7 +41,7 @@ impl<T: Number> Angle2Stabilizer<T> {
     ) -> Self {
         let mut angle_roll_pid = PidController::new();
         angle_roll_pid
-            .compute_fn(compute_angle)
+            .compute_fn(compute_cascade_angle)
             .set_point(angle_config.set_point_roll)
             .kp(angle_config.kp_roll)
             .ki(angle_config.ki_roll)
@@ -49,7 +49,7 @@ impl<T: Number> Angle2Stabilizer<T> {
 
         let mut angle_pitch_pid = PidController::new();
         angle_pitch_pid
-            .compute_fn(compute_angle)
+            .compute_fn(compute_cascade_angle)
             .set_point(angle_config.set_point_pitch)
             .kp(angle_config.kp_pitch)
             .ki(angle_config.ki_pitch)
@@ -131,15 +131,17 @@ impl<T: Number> FlightStabilizer<T> for Angle2Stabilizer<T> {
         // Prepare control data for roll and pitch
         let (imu_roll, imu_pitch, _) = imu_attitude;
         let (gyro_roll, gyro_pitch, gyro_yaw) = gyro_rate;
-        let angle_roll_data = AngleControlData {
+        let angle_roll_data = CascadeAngleControlData {
             measurement: imu_roll,
+            prev_measurement: self.prev_imu_roll,
             rate: gyro_roll,
             dt: dt,
             integral_limit: self.angle_i_limit,
             reset_integral: low_throttle,
         };
-        let angle_pitch_data = AngleControlData {
+        let angle_pitch_data = CascadeAngleControlData {
             measurement: imu_pitch,
+            prev_measurement: self.prev_imu_pitch,
             rate: gyro_pitch,
             dt: dt,
             integral_limit: self.angle_i_limit,
@@ -437,15 +439,17 @@ mod tests {
         stabilizer.prev_set_point_pitch = PREV_SET_POINT_PITCH;
 
         // Test the first part of the cascade.
-        let angle_roll_data = AngleControlData {
+        let angle_roll_data = CascadeAngleControlData {
             measurement: imu_attitude.0,
+            prev_measurement: imu_attitude.0,
             rate: gyro_rate.0,
             dt: dt,
             integral_limit: angle_config.i_limit,
             reset_integral: low_throttle,
         };
-        let angle_pitch_data = AngleControlData {
+        let angle_pitch_data = CascadeAngleControlData {
             measurement: imu_attitude.1,
+            prev_measurement: imu_attitude.1,
             rate: gyro_rate.1,
             dt: dt,
             integral_limit: angle_config.i_limit,
@@ -454,14 +458,14 @@ mod tests {
 
         // Compute the adjusted roll setpoint and internal values
         stabilizer.angle_roll_pid.set_point(set_point.0);
-        let (roll_error, roll_integral, roll_derivative) = compute_angle(&mut stabilizer.angle_roll_pid, angle_roll_data);
+        let (roll_error, roll_integral, roll_derivative) = compute_cascade_angle(&mut stabilizer.angle_roll_pid, angle_roll_data);
         let mut adjusted_set_point_roll =
             angle_config.scale * (angle_config.kp_roll * roll_error + angle_config.ki_roll * roll_integral + angle_config.kd_roll * roll_derivative);
         adjusted_set_point_roll = stabilizer.blend(adjusted_set_point_roll, PREV_SET_POINT_ROLL);
 
         // Compute the adjusted pitch setpoint and internal values
         stabilizer.angle_pitch_pid.set_point(set_point.1);
-        let (pitch_error, pitch_integral, pitch_derivative) = compute_angle(&mut stabilizer.angle_pitch_pid, angle_pitch_data);
+        let (pitch_error, pitch_integral, pitch_derivative) = compute_cascade_angle(&mut stabilizer.angle_pitch_pid, angle_pitch_data);
         let mut adjusted_set_point_pitch =
             angle_config.scale * (angle_config.kp_pitch * pitch_error + angle_config.ki_pitch * pitch_integral + angle_config.kd_pitch * pitch_derivative);
         adjusted_set_point_pitch = stabilizer.blend(adjusted_set_point_pitch, PREV_SET_POINT_PITCH);
