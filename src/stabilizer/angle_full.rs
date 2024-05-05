@@ -1,28 +1,29 @@
-// src/stabilizer/rate.rs
+// src/stabilizer/angle_full.rs
 
-//! # Rate-Based PID Flight Stabilization Controller
+//! # Angle-Based PID Flight Stabilization Controller
 //!
-//! This is a rate-based PID flight stabilization controller.
+//! This is an angle-based PID flight stabilization controller.
+//! Yaw also relies on angle-based stabilization.
 
-use crate::pid::{compute_rate, RateControlData};
+use crate::pid::{compute_angle, AngleControlData};
 use crate::{FlightStabilizer, FlightStabilizerConfig, Number};
 use piddiy::PidController;
 
-/// Struct representing the Rate PID Flight Stabilization Controller.
-pub struct RateStabilizer<T: Number> {
-    roll_pid: PidController<T, RateControlData<T>>,
-    pitch_pid: PidController<T, RateControlData<T>>,
-    yaw_pid: PidController<T, RateControlData<T>>,
+/// Struct representing the Angle PID Flight Stabilization Controller.
+pub struct AngleFullStabilizer<T: Number> {
+    roll_pid: PidController<T, AngleControlData<T>>,
+    pitch_pid: PidController<T, AngleControlData<T>>,
+    yaw_pid: PidController<T, AngleControlData<T>>,
     i_limit: T,
     scale: T,
 }
 
-impl<T: Number> RateStabilizer<T> {
+impl<T: Number> AngleFullStabilizer<T> {
     /// Creates a new controller using the provided configuration
     pub fn with_config(config: FlightStabilizerConfig<T>) -> Self {
         let mut roll_pid = PidController::new();
         roll_pid
-            .compute_fn(compute_rate)
+            .compute_fn(compute_angle)
             .set_point(config.set_point_roll)
             .kp(config.kp_roll)
             .ki(config.ki_roll)
@@ -30,7 +31,7 @@ impl<T: Number> RateStabilizer<T> {
 
         let mut pitch_pid = PidController::new();
         pitch_pid
-            .compute_fn(compute_rate)
+            .compute_fn(compute_angle)
             .set_point(config.set_point_pitch)
             .kp(config.kp_pitch)
             .ki(config.ki_pitch)
@@ -38,13 +39,13 @@ impl<T: Number> RateStabilizer<T> {
 
         let mut yaw_pid = PidController::new();
         yaw_pid
-            .compute_fn(compute_rate)
+            .compute_fn(compute_angle)
             .set_point(config.set_point_yaw)
             .kp(config.kp_yaw)
             .ki(config.ki_yaw)
             .kd(config.kd_yaw);
 
-        RateStabilizer {
+        AngleFullStabilizer {
             roll_pid,
             pitch_pid,
             yaw_pid,
@@ -59,11 +60,11 @@ impl<T: Number> RateStabilizer<T> {
     }
 }
 
-impl<T: Number> FlightStabilizer<T> for RateStabilizer<T> {
+impl<T: Number> FlightStabilizer<T> for AngleFullStabilizer<T> {
     fn control(
         &mut self,
         set_point: (T, T, T),
-        _imu_attitude: (T, T, T),
+        imu_attitude: (T, T, T),
         gyro_rate: (T, T, T),
         dt: T,
         low_throttle: bool,
@@ -75,14 +76,17 @@ impl<T: Number> FlightStabilizer<T> for RateStabilizer<T> {
         self.yaw_pid.set_point(set_point_yaw);
 
         // Prepare control data for roll and pitch
+        let (imu_roll, imu_pitch, imu_yaw) = imu_attitude;
         let (gyro_roll, gyro_pitch, gyro_yaw) = gyro_rate;
-        let roll_data = RateControlData {
+        let roll_data = AngleControlData {
+            measurement: imu_roll,
             rate: gyro_roll,
             dt: dt,
             integral_limit: self.i_limit,
             reset_integral: low_throttle,
         };
-        let pitch_data = RateControlData {
+        let pitch_data = AngleControlData {
+            measurement: imu_pitch,
             rate: gyro_pitch,
             dt: dt,
             integral_limit: self.i_limit,
@@ -90,7 +94,8 @@ impl<T: Number> FlightStabilizer<T> for RateStabilizer<T> {
         };
 
         // Prepare control data for yaw
-        let yaw_data = RateControlData {
+        let yaw_data = AngleControlData {
+            measurement: imu_yaw,
             rate: gyro_yaw,
             dt: dt,
             integral_limit: self.i_limit,
@@ -116,17 +121,17 @@ mod tests {
         let mut config = FlightStabilizerConfig::<f32>::new();
 
         // Set the PID gains for roll, pitch, and yaw.
-        config.kp_roll = 0.15;
-        config.ki_roll = 0.2;
-        config.kd_roll = 0.0002;
+        config.kp_roll = 0.2;
+        config.ki_roll = 0.3;
+        config.kd_roll = -0.05;
 
         config.kp_pitch = config.kp_roll;
         config.ki_pitch = config.ki_roll;
         config.kd_pitch = config.kd_roll;
 
-        config.kp_yaw = 0.3;
-        config.ki_yaw = 0.05;
-        config.kd_yaw = 0.00015;
+        config.kp_yaw = config.kp_roll;
+        config.ki_yaw = config.ki_roll;
+        config.kd_yaw = config.kd_roll;
 
         // Set the initial setpoints for roll, pitch, and yaw.
         // These default to zero.
@@ -143,11 +148,11 @@ mod tests {
         config
     }
 
-    /// Test the initialization of the RateStabilizer with a default configuration.
+    /// Test the initialization of the AngleStabilizer with a default configuration.
     #[test]
-    fn test_stabilizer_rate_initialization_with_default_config() {
+    fn test_stabilizer_angle_full_initialization_with_default_config() {
         let config = default_config();
-        let stabilizer = RateStabilizer::with_config(config);
+        let stabilizer = AngleFullStabilizer::with_config(config);
 
         assert_eq!(stabilizer.roll_pid.kp, config.kp_roll);
         assert_eq!(stabilizer.pitch_pid.kp, config.kp_pitch);
@@ -156,9 +161,9 @@ mod tests {
 
     /// Test that the integrator saturation works as expected by the DEFAULT_I_LIMIT.
     #[test]
-    fn test_stabilizer_rate_integrator_saturation() {
+    fn test_stabilizer_angle_full_integrator_saturation() {
         let config = default_config();
-        let mut stabilizer = RateStabilizer::with_config(config);
+        let mut stabilizer = AngleFullStabilizer::with_config(config);
 
         // Simulated sensor inputs and desired setpoints
         let set_point = (100.0, -100.0, 50.0); // desired roll, pitch, yaw
@@ -186,9 +191,9 @@ mod tests {
 
     /// Test to ensure integrators are reset when PWM is below threshold.
     #[test]
-    fn test_stabilizer_rate_low_throttle_integral_reset() {
+    fn test_stabilizer_angle_full_low_throttle_integral_reset() {
         let config = default_config();
-        let mut stabilizer = RateStabilizer::with_config(config);
+        let mut stabilizer = AngleFullStabilizer::with_config(config);
 
         // Simulated sensor inputs and desired setpoints
         let set_point = (10.0, 0.0, 10.0); // desired roll, pitch, yaw
@@ -225,9 +230,9 @@ mod tests {
 
     /// Test the no error contidion.
     #[test]
-    fn test_stabilizer_rate_no_error() {
+    fn test_stabilizer_angle_full_no_error() {
         let config = default_config();
-        let mut stabilizer = RateStabilizer::with_config(config);
+        let mut stabilizer = AngleFullStabilizer::with_config(config);
 
         // Simulated sensor inputs and desired setpoints
         let set_point = (0.0, 0.0, 0.0); // desired roll, pitch, yaw
@@ -248,24 +253,24 @@ mod tests {
 
     /// Test with specific inputs to calculate expected PID outputs.
     #[test]
-    fn test_stabilizer_rate_specific_pid_output() {
+    fn test_stabilizer_angle_full_specific_pid_output() {
         // Set up stabilizer
         let config = default_config();
-        let mut stabilizer = RateStabilizer::with_config(config);
+        let mut stabilizer = AngleFullStabilizer::with_config(config);
         stabilizer.roll_pid.integral = 0.2; // previous integral
         stabilizer.pitch_pid.integral = -0.2; // previous integral
-        stabilizer.yaw_pid.integral = 0.1; // previous integral
+        stabilizer.yaw_pid.integral = 0.2; // previous integral
 
         // Simulated sensor inputs and desired setpoints
-        let set_point = (10.0, -10.0, 5.0); // desired roll, pitch, yaw
-        let imu_attitude = (0.0, 0.0, 0.0); // current roll, pitch, yaw
-        let gyro_rate = (1.0, -1.0, -1.0); // current roll rate, pitch rate, yaw rate
+        let set_point = (10.0, 0.0, 5.0); // desired roll, pitch, yaw
+        let imu_attitude = (5.0, 5.0, 0.0); // current roll, pitch, yaw
+        let gyro_rate = (1.0, -1.0, 1.0); // current roll rate, pitch rate, yaw rate
         let dt = 0.01; // time step
         let low_throttle = false;
 
         // Perform the control computation
         let output = stabilizer.control(set_point, imu_attitude, gyro_rate, dt, low_throttle);
-        let expected_output = (0.01588, -0.01588, 0.01898);
+        let expected_output = (0.01025, -0.01025, 0.01025);
 
         assert!(
             vector_close(expected_output, output),

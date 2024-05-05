@@ -51,7 +51,11 @@ pub use flight_stabilizer::*;
 // flight stabilizer implementations
 pub mod angle;
 pub use angle::*;
+pub mod angle_full;
+pub use angle_full::*;
 pub mod angle2;
 pub use angle2::*;
+pub mod angle2_full;
+pub use angle2_full::*;
 pub mod rate;
 pub use rate::*;

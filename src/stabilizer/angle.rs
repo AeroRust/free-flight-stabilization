@@ -3,6 +3,7 @@
 //! # Angle-Based PID Flight Stabilization Controller
 //!
 //! This is an angle-based PID flight stabilization controller.
+//! Note that yaw relies on rate-based stabilization.
 
 use crate::pid::{compute_angle, compute_rate, AngleControlData, RateControlData};
 use crate::{FlightStabilizer, FlightStabilizerConfig, Number};
@@ -249,7 +250,7 @@ mod tests {
         );
     }
 
-    /// Test the control_angle function with specific inputs to calculate expected PID outputs.
+    /// Test with specific inputs to calculate expected PID outputs.
     #[test]
     fn test_stabilizer_angle_specific_pid_output() {
         // Set up stabilizer
