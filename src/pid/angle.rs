@@ -2,7 +2,7 @@
 
 //! # Angle-Based PID Control Module
 //!
-//! This module provides compute functions and control data structures
+//! This module provides a compute function and control data structure
 //! to perform angle-based PID (Proportional-Integral-Derivative) control
 //! calculations.
 

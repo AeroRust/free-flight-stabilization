@@ -1,10 +1,8 @@
 // src/stabilizer/flight_stabilizer.rs
 
-//! A module specifying the shared interface for PID-based flight stabilizers.
-//! This module is designed for embedded systems in no_std environments and can be
-//! adapted for various types of aircraft, including drones and RC planes.
-//! It includes a configuration structure for PID gains and a trait defining
-//! the stabilization functionality.
+//! A module specifying the shared interface for PID flight stabilizers.
+//! It includes configuration structures and a trait defining the stabilization
+//! functionality.
 
 use piddiy::Number as PiddiyNumber;
 

@@ -6,22 +6,19 @@ This repository contains a `no_std`, no-alloc Rust translation of the PID
 (Proportional, Integral, Derivative) control functions from dRehmFlight
 version 1.3, an Arduino-based flight controller software. These functions
 are used to stabilize unmanned aerial vehicles (UAVs) and are written with
-no external dependencies.
+minor external dependencies.
 
 ## Overview
 
-The initial translation preserves the structure of the original Arduino
+The initial translation preserved the structure of the original Arduino
 implementation to facilitate easy verification and comparison for those
-familiar with dRehmFlight. The aim is to maintain a detailed commit history
-to document the refactoring process. As currently written, the code assumes
-a single-threaded environment.
+familiar with dRehmFlight. The aim was to maintain a detailed commit history
+to document the refactoring process.
 
-## Flight Readiness
-
-The current architecture relies heavily on global state and `unsafe`
-practices, making it unsuitable for actual flight applications. This approach
-represents a fundamental mismatch with Rust’s design principles, and needs
-to be refactored.
+Tagged version v0.0.0 contains code for both the old direct translation,
+the new refactor, and tests with matching values for both. See the angle,
+rate, and angle2 stabilizers. Tests pass and values match. Only the refactored
+code remains in future commits.
 
 ## License
 
