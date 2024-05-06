@@ -18,6 +18,12 @@ pub struct AngleFullStabilizer<T: Number> {
     scale: T,
 }
 
+impl<T: Number> Default for AngleFullStabilizer<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Number> AngleFullStabilizer<T> {
     /// Creates a new controller using the provided configuration
     pub fn with_config(config: FlightStabilizerConfig<T>) -> Self {
@@ -81,14 +87,14 @@ impl<T: Number> FlightStabilizer<T> for AngleFullStabilizer<T> {
         let roll_data = AngleControlData {
             measurement: imu_roll,
             rate: gyro_roll,
-            dt: dt,
+            dt,
             integral_limit: self.i_limit,
             reset_integral: low_throttle,
         };
         let pitch_data = AngleControlData {
             measurement: imu_pitch,
             rate: gyro_pitch,
-            dt: dt,
+            dt,
             integral_limit: self.i_limit,
             reset_integral: low_throttle,
         };
@@ -97,7 +103,7 @@ impl<T: Number> FlightStabilizer<T> for AngleFullStabilizer<T> {
         let yaw_data = AngleControlData {
             measurement: imu_yaw,
             rate: gyro_yaw,
-            dt: dt,
+            dt,
             integral_limit: self.i_limit,
             reset_integral: low_throttle,
         };

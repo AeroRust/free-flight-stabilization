@@ -55,6 +55,12 @@ pub struct FlightStabilizerConfig<T: Number> {
     pub scale: T,
 }
 
+impl<T: Number> Default for FlightStabilizerConfig<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Number> FlightStabilizerConfig<T> {
     /// Creates a new configuration with default values for all parameters.
     /// Default values of zero or one are used.
@@ -62,7 +68,7 @@ impl<T: Number> FlightStabilizerConfig<T> {
     ///
     /// Example Usage
     /// ```
-    /// use pid_flight_stabilization::FlightStabilizerConfig;
+    /// use free_flight_stabilization::FlightStabilizerConfig;
     ///
     /// let mut config = FlightStabilizerConfig::<f32>::new();
     ///
@@ -92,7 +98,7 @@ impl<T: Number> FlightStabilizerConfig<T> {
     /// config.scale = 0.01;
     ///
     /// // The configuration is ready to use.
-    /// use pid_flight_stabilization::AngleStabilizer;
+    /// use free_flight_stabilization::AngleStabilizer;
     ///
     /// let flight_stabilizer = AngleStabilizer::with_config(config);
     /// ```
@@ -127,6 +133,12 @@ pub struct CascadeBlendingConfig<T: Number, const N: usize> {
     pub limit: T,
 }
 
+impl<T: Number, const N: usize> Default for CascadeBlendingConfig<T, N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Number, const N: usize> CascadeBlendingConfig<T, N> {
     /// Creates a new configuration with default values for all blending parameters.
     /// Default values of one are used.
@@ -134,7 +146,7 @@ impl<T: Number, const N: usize> CascadeBlendingConfig<T, N> {
     ///
     /// Example Usage
     /// ```
-    /// use pid_flight_stabilization::CascadeBlendingConfig;
+    /// use free_flight_stabilization::CascadeBlendingConfig;
     ///
     /// let mut blending_config = CascadeBlendingConfig::<f32, 2>::new();
     /// blending_config.k = 30.0;
@@ -142,7 +154,7 @@ impl<T: Number, const N: usize> CascadeBlendingConfig<T, N> {
     /// blending_config.limit = 240.0;
     ///
     /// // The configuration is ready to use.
-    /// use pid_flight_stabilization::{Angle2Stabilizer, FlightStabilizerConfig};
+    /// use free_flight_stabilization::{Angle2Stabilizer, FlightStabilizerConfig};
     /// let angle_config = FlightStabilizerConfig::<f32>::new();
     /// let rate_config = FlightStabilizerConfig::<f32>::new();
     ///

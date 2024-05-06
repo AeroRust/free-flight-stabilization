@@ -37,6 +37,12 @@ pub struct Angle2FullStabilizer<T: Number> {
     prev_imu_yaw: T,
 }
 
+impl<T: Number> Default for Angle2FullStabilizer<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Number> Angle2FullStabilizer<T> {
     /// Creates a new controller using the provided configuration
     pub fn with_config(
@@ -154,7 +160,7 @@ impl<T: Number> FlightStabilizer<T> for Angle2FullStabilizer<T> {
             measurement: imu_roll,
             prev_measurement: self.prev_imu_roll,
             rate: gyro_roll,
-            dt: dt,
+            dt,
             integral_limit: self.angle_i_limit,
             reset_integral: low_throttle,
         };
@@ -162,7 +168,7 @@ impl<T: Number> FlightStabilizer<T> for Angle2FullStabilizer<T> {
             measurement: imu_pitch,
             prev_measurement: self.prev_imu_pitch,
             rate: gyro_pitch,
-            dt: dt,
+            dt,
             integral_limit: self.angle_i_limit,
             reset_integral: low_throttle,
         };
@@ -170,7 +176,7 @@ impl<T: Number> FlightStabilizer<T> for Angle2FullStabilizer<T> {
             measurement: imu_yaw,
             prev_measurement: self.prev_imu_yaw,
             rate: gyro_yaw,
-            dt: dt,
+            dt,
             integral_limit: self.angle_i_limit,
             reset_integral: low_throttle,
         };
@@ -184,9 +190,21 @@ impl<T: Number> FlightStabilizer<T> for Angle2FullStabilizer<T> {
             self.angle_scale * self.angle_yaw_pid.compute(angle_yaw_data);
 
         //Apply blending gain, clamp, and LP filter for artificial damping
-        adjusted_set_point_roll = self.blend(adjusted_set_point_roll, self.prev_set_point_roll, self.beta_roll);
-        adjusted_set_point_pitch = self.blend(adjusted_set_point_pitch, self.prev_set_point_pitch, self.beta_pitch);
-        adjusted_set_point_yaw = self.blend(adjusted_set_point_yaw, self.prev_set_point_yaw, self.beta_yaw);
+        adjusted_set_point_roll = self.blend(
+            adjusted_set_point_roll,
+            self.prev_set_point_roll,
+            self.beta_roll,
+        );
+        adjusted_set_point_pitch = self.blend(
+            adjusted_set_point_pitch,
+            self.prev_set_point_pitch,
+            self.beta_pitch,
+        );
+        adjusted_set_point_yaw = self.blend(
+            adjusted_set_point_yaw,
+            self.prev_set_point_yaw,
+            self.beta_yaw,
+        );
 
         // Set the rate set points for roll, pitch, and yaw
         self.rate_roll_pid.set_point(adjusted_set_point_roll);
@@ -196,19 +214,19 @@ impl<T: Number> FlightStabilizer<T> for Angle2FullStabilizer<T> {
         // Prepare rate control data for roll, pitch, and yaw
         let rate_roll_data = RateControlData {
             rate: gyro_roll,
-            dt: dt,
+            dt,
             integral_limit: self.rate_i_limit,
             reset_integral: low_throttle,
         };
         let rate_pitch_data = RateControlData {
             rate: gyro_pitch,
-            dt: dt,
+            dt,
             integral_limit: self.rate_i_limit,
             reset_integral: low_throttle,
         };
         let rate_yaw_data = RateControlData {
             rate: gyro_yaw,
-            dt: dt,
+            dt,
             integral_limit: self.rate_i_limit,
             reset_integral: low_throttle,
         };
@@ -301,7 +319,8 @@ mod tests {
     #[test]
     fn test_stabilizer_angle2_full_initialization_with_default_config() {
         let (angle_config, rate_config, blending_config) = default_config();
-        let stabilizer = Angle2FullStabilizer::with_config(angle_config, rate_config, blending_config);
+        let stabilizer =
+            Angle2FullStabilizer::with_config(angle_config, rate_config, blending_config);
 
         assert_eq!(stabilizer.angle_roll_pid.kp, angle_config.kp_roll);
         assert_eq!(stabilizer.angle_pitch_pid.kp, angle_config.kp_pitch);
@@ -335,7 +354,11 @@ mod tests {
             stabilizer.angle_pitch_pid.integral,
             stabilizer.angle_yaw_pid.integral,
         );
-        let expected_angle_integrals = (angle_config.i_limit, -angle_config.i_limit, angle_config.i_limit);
+        let expected_angle_integrals = (
+            angle_config.i_limit,
+            -angle_config.i_limit,
+            angle_config.i_limit,
+        );
         assert!(
             vector_close(expected_angle_integrals, angle_integrals),
             "Integrals should be capped."
@@ -502,24 +525,45 @@ mod tests {
 
         // Compute the adjusted roll setpoint and internal values
         stabilizer.angle_roll_pid.set_point(set_point.0);
-        let (roll_error, roll_integral, roll_derivative) = compute_cascade_angle(&mut stabilizer.angle_roll_pid, angle_roll_data);
-        let mut adjusted_set_point_roll =
-            angle_config.scale * (angle_config.kp_roll * roll_error + angle_config.ki_roll * roll_integral + angle_config.kd_roll * roll_derivative);
-        adjusted_set_point_roll = stabilizer.blend(adjusted_set_point_roll, PREV_SET_POINT_ROLL, blending_config.beta[0]);
+        let (roll_error, roll_integral, roll_derivative) =
+            compute_cascade_angle(&mut stabilizer.angle_roll_pid, angle_roll_data);
+        let mut adjusted_set_point_roll = angle_config.scale
+            * (angle_config.kp_roll * roll_error
+                + angle_config.ki_roll * roll_integral
+                + angle_config.kd_roll * roll_derivative);
+        adjusted_set_point_roll = stabilizer.blend(
+            adjusted_set_point_roll,
+            PREV_SET_POINT_ROLL,
+            blending_config.beta[0],
+        );
 
         // Compute the adjusted pitch setpoint and internal values
         stabilizer.angle_pitch_pid.set_point(set_point.1);
-        let (pitch_error, pitch_integral, pitch_derivative) = compute_cascade_angle(&mut stabilizer.angle_pitch_pid, angle_pitch_data);
-        let mut adjusted_set_point_pitch =
-            angle_config.scale * (angle_config.kp_pitch * pitch_error + angle_config.ki_pitch * pitch_integral + angle_config.kd_pitch * pitch_derivative);
-        adjusted_set_point_pitch = stabilizer.blend(adjusted_set_point_pitch, PREV_SET_POINT_PITCH, blending_config.beta[1]);
+        let (pitch_error, pitch_integral, pitch_derivative) =
+            compute_cascade_angle(&mut stabilizer.angle_pitch_pid, angle_pitch_data);
+        let mut adjusted_set_point_pitch = angle_config.scale
+            * (angle_config.kp_pitch * pitch_error
+                + angle_config.ki_pitch * pitch_integral
+                + angle_config.kd_pitch * pitch_derivative);
+        adjusted_set_point_pitch = stabilizer.blend(
+            adjusted_set_point_pitch,
+            PREV_SET_POINT_PITCH,
+            blending_config.beta[1],
+        );
 
         // Compute the adjusted yaw setpoint and internal values
         stabilizer.angle_yaw_pid.set_point(set_point.2);
-        let (yaw_error, yaw_integral, yaw_derivative) = compute_cascade_angle(&mut stabilizer.angle_yaw_pid, angle_yaw_data);
-        let mut adjusted_set_point_yaw =
-            angle_config.scale * (angle_config.kp_yaw * yaw_error + angle_config.ki_yaw * yaw_integral + angle_config.kd_yaw * yaw_derivative);
-        adjusted_set_point_yaw = stabilizer.blend(adjusted_set_point_yaw, PREV_SET_POINT_YAW, blending_config.beta[2]);
+        let (yaw_error, yaw_integral, yaw_derivative) =
+            compute_cascade_angle(&mut stabilizer.angle_yaw_pid, angle_yaw_data);
+        let mut adjusted_set_point_yaw = angle_config.scale
+            * (angle_config.kp_yaw * yaw_error
+                + angle_config.ki_yaw * yaw_integral
+                + angle_config.kd_yaw * yaw_derivative);
+        adjusted_set_point_yaw = stabilizer.blend(
+            adjusted_set_point_yaw,
+            PREV_SET_POINT_YAW,
+            blending_config.beta[2],
+        );
 
         // Internal values should be inverted
         assert_eq!(roll_error, -pitch_error);
@@ -530,7 +574,11 @@ mod tests {
         assert_eq!(roll_derivative, yaw_derivative);
 
         // Adjusted set points should match standard numbers
-        let adjusted_set_points = (adjusted_set_point_roll, adjusted_set_point_pitch, adjusted_set_point_yaw);
+        let adjusted_set_points = (
+            adjusted_set_point_roll,
+            adjusted_set_point_pitch,
+            adjusted_set_point_yaw,
+        );
         let expected_adjusted_set_points = (72.905, -72.905, 72.905);
         assert!(
             vector_close(expected_adjusted_set_points, adjusted_set_points),
