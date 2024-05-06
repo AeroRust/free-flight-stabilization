@@ -3,14 +3,15 @@
 [package]
 name = "free-flight-stabilization"
 version = "0.1.0"
-authors = ["Brendan Sechter <sgeos@hotmail.com>"]
+authors = [
+    "Brendan Sechter <sgeos@hotmail.com>",
+    "AeroRust <aerospace.rust@gmail.com>",
+]
 categories = [
-    "aerospace",
     "aerospace::drones",
     "aerospace::unmanned-aerial-vehicles",
     "algorithms",
     "embedded",
-    "no-std",
     "no-std::no-alloc",
 ]
 description = "PID flight stabilization functions. no_std, no-alloc."
