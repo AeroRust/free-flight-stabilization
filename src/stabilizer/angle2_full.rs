@@ -25,7 +25,9 @@ pub struct Angle2FullStabilizer<T: Number> {
     rate_i_limit: T,
     rate_scale: T,
     kl: T,             // blending factor for angle and rate
-    beta: T,           // blending factor for angle and rate
+    beta_roll: T,      // blending factor for angle and rate
+    beta_pitch: T,     // blending factor for angle and rate
+    beta_yaw: T,       // blending factor for angle and rate
     blending_limit: T, // blending factor for angle and rate
     prev_set_point_roll: T,
     prev_set_point_pitch: T,
@@ -40,7 +42,7 @@ impl<T: Number> Angle2FullStabilizer<T> {
     pub fn with_config(
         angle_config: FlightStabilizerConfig<T>,
         rate_config: FlightStabilizerConfig<T>,
-        blending_config: CascadeBlendingConfig<T>,
+        blending_config: CascadeBlendingConfig<T, 3>,
     ) -> Self {
         let mut angle_roll_pid = PidController::new();
         angle_roll_pid
@@ -102,7 +104,9 @@ impl<T: Number> Angle2FullStabilizer<T> {
             rate_i_limit: rate_config.i_limit,
             rate_scale: rate_config.scale,
             kl: blending_config.k,
-            beta: blending_config.beta,
+            beta_roll: blending_config.beta[0],
+            beta_pitch: blending_config.beta[1],
+            beta_yaw: blending_config.beta[2],
             blending_limit: blending_config.limit,
             prev_set_point_roll: angle_config.set_point_roll,
             prev_set_point_pitch: angle_config.set_point_pitch,
@@ -122,9 +126,9 @@ impl<T: Number> Angle2FullStabilizer<T> {
         )
     }
 
-    fn blend(&self, set_point: T, prev_set_point: T) -> T {
+    fn blend(&self, set_point: T, prev_set_point: T, beta: T) -> T {
         let result = (set_point * self.kl).clamp(-self.blending_limit, self.blending_limit);
-        self.beta * result + (T::one() - self.beta) * prev_set_point
+        beta * result + (T::one() - beta) * prev_set_point
     }
 }
 
@@ -180,9 +184,9 @@ impl<T: Number> FlightStabilizer<T> for Angle2FullStabilizer<T> {
             self.angle_scale * self.angle_yaw_pid.compute(angle_yaw_data);
 
         //Apply blending gain, clamp, and LP filter for artificial damping
-        adjusted_set_point_roll = self.blend(adjusted_set_point_roll, self.prev_set_point_roll);
-        adjusted_set_point_pitch = self.blend(adjusted_set_point_pitch, self.prev_set_point_pitch);
-        adjusted_set_point_yaw = self.blend(adjusted_set_point_yaw, self.prev_set_point_yaw);
+        adjusted_set_point_roll = self.blend(adjusted_set_point_roll, self.prev_set_point_roll, self.beta_roll);
+        adjusted_set_point_pitch = self.blend(adjusted_set_point_pitch, self.prev_set_point_pitch, self.beta_pitch);
+        adjusted_set_point_yaw = self.blend(adjusted_set_point_yaw, self.prev_set_point_yaw, self.beta_yaw);
 
         // Set the rate set points for roll, pitch, and yaw
         self.rate_roll_pid.set_point(adjusted_set_point_roll);
@@ -234,7 +238,7 @@ mod tests {
     fn default_config() -> (
         FlightStabilizerConfig<f32>,
         FlightStabilizerConfig<f32>,
-        CascadeBlendingConfig<f32>,
+        CascadeBlendingConfig<f32, 3>,
     ) {
         // Define angle config with shared values
         let mut angle_config = FlightStabilizerConfig::new();
@@ -286,7 +290,7 @@ mod tests {
         // define blending config
         let mut blending_config = CascadeBlendingConfig::new();
 
-        blending_config.beta = 0.9;
+        blending_config.beta = [0.9; 3];
         blending_config.k = 30.0;
         blending_config.limit = 240.0;
 
@@ -304,7 +308,7 @@ mod tests {
         assert_eq!(stabilizer.rate_roll_pid.kp, rate_config.kp_roll);
         assert_eq!(stabilizer.rate_pitch_pid.kp, rate_config.kp_pitch);
         assert_eq!(stabilizer.rate_yaw_pid.kp, rate_config.kp_yaw);
-        assert_eq!(stabilizer.beta, blending_config.beta);
+        assert_eq!(stabilizer.beta_roll, blending_config.beta[0]);
     }
 
     /// Test that the integrator saturation works as expected by the DEFAULT_I_LIMIT.
@@ -501,21 +505,21 @@ mod tests {
         let (roll_error, roll_integral, roll_derivative) = compute_cascade_angle(&mut stabilizer.angle_roll_pid, angle_roll_data);
         let mut adjusted_set_point_roll =
             angle_config.scale * (angle_config.kp_roll * roll_error + angle_config.ki_roll * roll_integral + angle_config.kd_roll * roll_derivative);
-        adjusted_set_point_roll = stabilizer.blend(adjusted_set_point_roll, PREV_SET_POINT_ROLL);
+        adjusted_set_point_roll = stabilizer.blend(adjusted_set_point_roll, PREV_SET_POINT_ROLL, blending_config.beta[0]);
 
         // Compute the adjusted pitch setpoint and internal values
         stabilizer.angle_pitch_pid.set_point(set_point.1);
         let (pitch_error, pitch_integral, pitch_derivative) = compute_cascade_angle(&mut stabilizer.angle_pitch_pid, angle_pitch_data);
         let mut adjusted_set_point_pitch =
             angle_config.scale * (angle_config.kp_pitch * pitch_error + angle_config.ki_pitch * pitch_integral + angle_config.kd_pitch * pitch_derivative);
-        adjusted_set_point_pitch = stabilizer.blend(adjusted_set_point_pitch, PREV_SET_POINT_PITCH);
+        adjusted_set_point_pitch = stabilizer.blend(adjusted_set_point_pitch, PREV_SET_POINT_PITCH, blending_config.beta[1]);
 
         // Compute the adjusted yaw setpoint and internal values
         stabilizer.angle_yaw_pid.set_point(set_point.2);
         let (yaw_error, yaw_integral, yaw_derivative) = compute_cascade_angle(&mut stabilizer.angle_yaw_pid, angle_yaw_data);
         let mut adjusted_set_point_yaw =
             angle_config.scale * (angle_config.kp_yaw * yaw_error + angle_config.ki_yaw * yaw_integral + angle_config.kd_yaw * yaw_derivative);
-        adjusted_set_point_yaw = stabilizer.blend(adjusted_set_point_yaw, PREV_SET_POINT_YAW);
+        adjusted_set_point_yaw = stabilizer.blend(adjusted_set_point_yaw, PREV_SET_POINT_YAW, blending_config.beta[2]);
 
         // Internal values should be inverted
         assert_eq!(roll_error, -pitch_error);

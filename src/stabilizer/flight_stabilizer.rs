@@ -118,16 +118,16 @@ impl<T: Number> FlightStabilizerConfig<T> {
 
 /// Configuration for PID cascade blending.
 #[derive(Clone, Copy)]
-pub struct CascadeBlendingConfig<T: Number> {
+pub struct CascadeBlendingConfig<T: Number, const N: usize> {
     /// Blending weight.
-    pub beta: T,
+    pub beta: [T; N],
     /// Pre-blend gain.
     pub k: T,
     /// Pre-blend scaling limit.
     pub limit: T,
 }
 
-impl<T: Number> CascadeBlendingConfig<T> {
+impl<T: Number, const N: usize> CascadeBlendingConfig<T, N> {
     /// Creates a new configuration with default values for all blending parameters.
     /// Default values of one are used.
     /// These should be replaced meaningful values that are tuned for the hardware.
@@ -136,9 +136,9 @@ impl<T: Number> CascadeBlendingConfig<T> {
     /// ```
     /// use pid_flight_stabilization::CascadeBlendingConfig;
     ///
-    /// let mut blending_config = CascadeBlendingConfig::<f32>::new();
+    /// let mut blending_config = CascadeBlendingConfig::<f32, 2>::new();
     /// blending_config.k = 30.0;
-    /// blending_config.beta = 0.9;
+    /// blending_config.beta = [0.9; 2];
     /// blending_config.limit = 240.0;
     ///
     /// // The configuration is ready to use.
@@ -150,7 +150,7 @@ impl<T: Number> CascadeBlendingConfig<T> {
     /// ```
     pub fn new() -> Self {
         Self {
-            beta: T::one(),
+            beta: [T::one(); N],
             k: T::one(),
             limit: T::one(),
         }
