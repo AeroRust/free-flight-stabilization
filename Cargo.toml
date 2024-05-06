@@ -30,3 +30,6 @@ repository = "https://github.com/AeroRust/free_flight_stabilization"
 num-traits = "0.2.18"
 piddiy = "0.1.1"
 
+[dev-dependencies]
+fixed = { version = "1.27.0", features = ["num-traits"] }
+libc = "0.2.154"
