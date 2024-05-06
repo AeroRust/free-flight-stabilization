@@ -1,8 +1,8 @@
 # Cargo.toml
 
 [package]
-name = "pid_flight_stabilization"
-version = "0.1.1"
+name = "free_flight_stabilization"
+version = "0.1.0"
 edition = "2021"
 
 [dependencies]
