@@ -1,0 +1,41 @@
+name: Build
+
+on: [push]
+
+# Stops the running workflow of previous pushes
+concurrency:
+  # cancel per workflow
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Lint, test and build
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Rust setup (stable)
+      uses: dtolnay/rust-toolchain@stable
+
+    - uses: Swatinem/rust-cache@v2
+
+    - name: Lint - rustfmt
+      run: cargo fmt --all -- --check
+
+    - name: Lint - clippy
+      run: cargo clippy --all --no-deps -- -D warnings
+
+    - name: Check
+      run: cargo check
+
+    - name: Test
+      run: cargo test
+
+    - name: Build docs with --all-features
+      env:
+        RUSTDOCFLAGS: -D warnings --cfg docsrs
+      run: cargo doc --no-deps --all-features
