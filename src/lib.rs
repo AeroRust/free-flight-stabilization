@@ -12,6 +12,8 @@
 
 pub mod pid;
 pub mod stabilizer;
+
+#[doc(inline)]
 pub use stabilizer::*;
 
 #[cfg(test)]

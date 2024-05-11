@@ -5,9 +5,14 @@
 //! This module provides compute functions and control data structures
 //! to perform PID (Proportional-Integral-Derivative) control calculations.
 
-pub mod angle;
+mod angle;
+#[doc(inline)]
 pub use angle::*;
-pub mod cascade_angle;
+
+mod cascade_angle;
+#[doc(inline)]
 pub use cascade_angle::*;
-pub mod rate;
+
+mod rate;
+#[doc(inline)]
 pub use rate::*;
