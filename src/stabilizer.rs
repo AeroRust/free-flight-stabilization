@@ -45,17 +45,27 @@
 //! avenues for safer and more efficient concurrency models in multi-threaded or interrupt-driven contexts.
 
 // flight stabilizer trait
-pub mod flight_stabilizer;
+mod flight_stabilizer;
+#[doc(inline)]
 pub use flight_stabilizer::*;
 
 // flight stabilizer implementations
-pub mod angle;
+mod angle;
+#[doc(inline)]
 pub use angle::*;
-pub mod angle_full;
+
+mod angle_full;
+#[doc(inline)]
 pub use angle_full::*;
-pub mod angle2;
+
+mod angle2;
+#[doc(inline)]
 pub use angle2::*;
-pub mod angle2_full;
+
+mod angle2_full;
+#[doc(inline)]
 pub use angle2_full::*;
-pub mod rate;
+
+mod rate;
+#[doc(inline)]
 pub use rate::*;
