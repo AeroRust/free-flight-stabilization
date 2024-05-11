@@ -10,7 +10,17 @@ concurrency:
 
 jobs:
   build:
-    name: Lint, test and build
+    name: Lint, test and build rust-${{ matrix.toolchain }} ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+          - stable
+          - beta
+          - nightly
+        target:
+          - thumbv7em-none-eabi
+
     runs-on: ubuntu-latest
 
     steps:
@@ -18,10 +28,15 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Rust setup (stable)
-      uses: dtolnay/rust-toolchain@stable
+    - name: Rust setup rust-${{ matrix.toolchain }} ${{ matrix.target }}
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.toolchain }}
+        targets: ${{ matrix.target }}
+        components: clippy, rustfmt
 
-    - uses: Swatinem/rust-cache@v2
+    - id: cache-rust
+      uses: Swatinem/rust-cache@v2
 
     - name: Lint - rustfmt
       run: cargo fmt --all -- --check
@@ -33,9 +48,31 @@ jobs:
       run: cargo check
 
     - name: Test
-      run: cargo test
+      run: cargo test --verbose --lib --bins --tests --benches --example angle
+
+    - name: Add nightly to build docs
+      run: rustup toolchain install nightly
 
     - name: Build docs with --all-features
       env:
         RUSTDOCFLAGS: -D warnings --cfg docsrs
-      run: cargo doc --no-deps --all-features
+      run: cargo +nightly doc --no-deps --all-features
+
+  test-no_std_fixed:
+    name: Test no_std_fixed rust-${{ matrix.toolchain }} ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+          - nightly
+        target:
+          - thumbv7em-none-eabi
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.toolchain }}
+        targets: ${{ matrix.target }}
+    - run: cargo test --verbose --example no_std_fixed
+
