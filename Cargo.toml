@@ -15,7 +15,6 @@ categories = [
     "no-std::no-alloc",
 ]
 description = "PID flight stabilization functions. no_std, no-alloc."
-documentation = "https://docs.rs/free-flight-stabilization"
 edition = "2021"
 keywords = [
     "automation",
@@ -25,7 +24,9 @@ keywords = [
 ]
 license = "GPL-3.0"
 readme = "README.md"
-repository = "https://github.com/AeroRust/free_flight_stabilization"
+repository = "https://github.com/AeroRust/free-flight-stabilization"
+
+rust-version = "1.71"
 
 [dependencies]
 num-traits = "0.2.18"
@@ -34,3 +35,7 @@ piddiy = "0.1.1"
 [dev-dependencies]
 fixed = { version = "1.27.0", features = ["num-traits"] }
 libc = "0.2.154"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

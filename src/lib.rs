@@ -9,6 +9,8 @@
 
 #![no_std]
 #![deny(missing_docs)]
+#![deny(rustdoc::broken_intra_doc_links)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub mod pid;
 pub mod stabilizer;
