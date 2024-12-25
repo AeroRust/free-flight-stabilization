@@ -7,7 +7,7 @@
 //! version 1.3, an Arduino-based flight controller software. These functions
 //! are used to stabilize unmanned aerial vehicles (UAVs).
 
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
 #![cfg_attr(docsrs, feature(doc_cfg))]

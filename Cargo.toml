@@ -28,13 +28,20 @@ repository = "https://github.com/AeroRust/free-flight-stabilization"
 
 rust-version = "1.71"
 
+[features]
+default = []
+std = ["num-traits/std", "piddiy/std", "fixed/std"]
+
 [dependencies]
-num-traits = "0.2.18"
+num-traits = { version = "0.2", default-features = false }
 piddiy = "0.1.1"
 
 [dev-dependencies]
-fixed = { version = "1.27.0", features = ["num-traits"] }
-libc = "0.2.154"
+fixed = { version = "1.28", features = ["num-traits"] }
+libc = { version = "0.2", default-features = false }
+
+[patch.crates-io]
+piddiy = { version = "0.1.1", git = "https://github.com/LechevSpace/piddiy", branch = "fix/no_std-num-trait-for-float-numbers" }
 
 [package.metadata.docs.rs]
 all-features = true
